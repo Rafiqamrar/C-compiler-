@@ -204,9 +204,21 @@ af : AF                       {}
 
 
 // IV.1 Affectations
+aff : ID EQ exp
+{
+    attribute  a = get_symbol_value($1);
+    //verification du type
+    if (a->type != $3) {
+        // promotion int -> float si besoin
+        if (a->type == FLOAT && $3 == INT) {
+            printf("    I2F;\n");
+        } else {
+            yyerror("Type mismatch in assignment to variable ");
+        }
+    }
 
-aff : ID EQ exp               {}
-;
+
+}
 
 
 // IV.2 Return
@@ -249,36 +261,169 @@ while : WHILE                 {}
 
 // V. Expressions
 
+
+// V. Expressions
+
 exp
-// V.1 Exp. arithmetiques
-: MOINS exp %prec UNA         {printf("    LOADI(0);\n");
-                              printf("    SUBI;\n");}
-         // -x + y lue comme (- x) + y  et pas - (x + y)
-| exp PLUS exp                { printf("    ADDI;\n");}
-| exp MOINS exp               {printf("    SUBI;\n");}
-| exp STAR exp                { MULTI printf("    MULTI;\n");}
-| exp DIV exp                 { printf("    DIVI;\n");}
-| PO exp PF                   { }
-| ID                          {}
-| app                         {}
-| NUM                         { printf("    LOADI(%d);\n", $1);}
-| DEC                         {}
+: NUM
+  {
+    printf("    LOADI(%d);\n", $1);
+    $$ = INT;
+  }
+| DEC
+  {
+    printf("    LOADF(%f);\n", $1);
+    $$ = FLOAT;
+  }
+| MOINS exp %prec UNA
+  {
+        if ($2 == FLOAT) {
+        printf("    MINUSF;\n");
+        $$ = FLOAT;
+        } else {
+        printf("    MINUSI;\n");
+        $$ = INT;
+        }
+  }
+| exp PLUS exp
+  {
+    if ($1 == INT && $3 == INT) {
+      printf("    ADDI;\n");
+      $$ = INT;
+    } else {
+      // promotion vers float
+      if ($1 == INT) printf("    I2F1;\n");
+      if ($3 == INT) printf("    I2F2;\n");
+      printf("    ADDF;\n");
+      $$ = FLOAT;
+    }
+  }
+| exp MOINS exp
+  {
+    if ($1 == INT && $3 == INT) {
+      printf("    SUBI;\n");
+      $$ = INT;
+    } else {
+      if ($1 == INT) printf("    I2F1;\n");
+      if ($3 == INT) printf("    I2F2;\n");
+      printf("    SUBF;\n");
+      $$ = FLOAT;
+    }
+  }
+| exp STAR exp
+  {
+    if ($1 == INT && $3 == INT) {
+      printf("    MULTI;\n");
+      $$ = INT;
+    } else {
+      if ($1 == INT) printf("    I2F1;\n");
+      if ($3 == INT) printf("    I2F2;\n");
+      printf("    MULTF;\n");
+      $$ = FLOAT;
+    }
+  }
+| exp DIV exp
+  {
+    if ($1 == INT && $3 == INT) {
+      printf("    DIVI;\n");
+      $$ = INT;
+    } else {
+      if ($1 == INT) printf("    I2F1;\n");
+      if ($3 == INT) printf("    I2F2;\n");
+      printf("    DIVF;\n");
+      $$ = FLOAT;
+    }
+  }
+| PO exp PF
+  {
+    $$ = $2;
+  }
+
+
 
 
 // V.2. Booléens
 
-| NOT exp %prec UNA           {}
-| exp INF exp                 {}
-| exp SUP exp                 {}
-| exp EQUAL exp               {}
-| exp DIFF exp                {}
-| exp AND exp                 {}
-| exp OR exp                  {}
+| exp INF exp
+  {
+    //float vs int 
+    if ($1 == FLOAT && $3 == INT) {
+        printf("    I2F2;\n");
+    } else if ($1 == INT && $3 == FLOAT) {
+        printf("    I2F1;\n");
+    }
+    if ($1 == FLOAT && $3 == INT) {    
+      printf("    LTI;\n");   // < sur int (ou float casté dans PCode)
+      $$ = INT;
+
+}
+    printf("    LTF;\n");   // < sur int (ou float casté dans PCode)
+    $$ = INT;
+  }
+| exp SUP exp
+  {
+if ($1 == FLOAT && $3 == INT) {
+        printf("    I2F2;\n");
+    } else if ($1 == INT && $3 == FLOAT) {
+        printf("    I2F1;\n");
+    }
+    if ($1 == FLOAT && $3 == INT) {    
+      printf("    GTI;\n");   // < sur int (ou float casté dans PCode)
+      $$ = INT;
+
+}
+    printf("    GTF;\n");   // < sur int (ou float casté dans PCode)
+    $$ = INT;
+  }
+| exp EQUAL exp
+  {
+if ($1 == FLOAT && $3 == INT) {
+        printf("    I2F2;\n");
+    } else if ($1 == INT && $3 == FLOAT) {
+        printf("    I2F1;\n");
+    }
+    if ($1 == FLOAT && $3 == INT) {    
+      printf("    EQI;\n");   // < sur int (ou float casté dans PCode)
+      $$ = INT;
+
+}
+    printf("    EQF;\n");   // < sur int (ou float casté dans PCode)
+    $$ = INT;
+  }
+| exp DIFF exp
+  {
+if ($1 == FLOAT && $3 == INT) {
+        printf("    I2F2;\n");
+    } else if ($1 == INT && $3 == FLOAT) {
+        printf("    I2F1;\n");
+    }
+    if ($1 == FLOAT && $3 == INT) {    
+      printf("    NEQI;\n");   // < sur int (ou float casté dans PCode)
+      $$ = INT;
+
+}
+    printf("    NEQF;\n");   // < sur int (ou float casté dans PCode)
+    $$ = INT;
+  }
+| NOT exp %prec UNA
+  {
+    // printf("    NOT;\n");
+    // $$ = INT;
+    yyerror("NOT/AND/OR non implementés (option booléens paresseux)");
+  }
+| exp AND exp
+  {
+    yyerror("AND non implementé en version non paresseuse");
+  }
+| exp OR exp
+  {
+    yyerror("OR non implementé en version non paresseuse");
+  }
+
 
 ;
-
 // V.3 Applications de fonctions
-
+/*
 
 app : fid PO args PF          {}
 ;
@@ -292,6 +437,8 @@ args :  arglist               {}
 arglist : arglist VIR exp     {} // récursion gauche pour empiler les arguements de la fonction de gauche à droite
 | exp                         {}
 ;
+*/
+
 
 
 
