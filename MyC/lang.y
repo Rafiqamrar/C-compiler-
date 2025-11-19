@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "PCode/PCode.h"
   
 extern int yylex();
 extern int yyparse();
@@ -250,16 +251,17 @@ while : WHILE                 {}
 
 exp
 // V.1 Exp. arithmetiques
-: MOINS exp %prec UNA         {}
+: MOINS exp %prec UNA         {printf("    LOADI(0);\n");
+                              printf("    SUBI;\n");}
          // -x + y lue comme (- x) + y  et pas - (x + y)
-| exp PLUS exp                {}
-| exp MOINS exp               {}
-| exp STAR exp                {}
-| exp DIV exp                 {}
-| PO exp PF                   {}
+| exp PLUS exp                { printf("    ADDI;\n");}
+| exp MOINS exp               {printf("    SUBI;\n");}
+| exp STAR exp                { MULTI printf("    MULTI;\n");}
+| exp DIV exp                 { printf("    DIVI;\n");}
+| PO exp PF                   { }
 | ID                          {}
 | app                         {}
-| NUM                         {}
+| NUM                         { printf("    LOADI(%d);\n", $1);}
 | DEC                         {}
 
 
