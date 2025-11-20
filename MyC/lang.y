@@ -16,7 +16,15 @@ void yyerror (char* s) {
   }
 		
 int depth=0; // block depth
+int offset=0; // variable offset in current block
+int current_decl_type; // type of current declaration (used in vlist)
  
+int label_counter = 0;
+
+int newLabel() {
+    return label_counter++;
+}
+
 
 %}
 
@@ -90,6 +98,9 @@ void end_glob_var_decl(){
 // liste de tous les type des attributs des non terminaux que vous voulez manipuler l'attribut (il faudra en ajouter plein ;-) )
 %type <type_value> type exp  typename
 %type <string_value> fun_head
+%type <type_value> aff
+%type <label_value> cond if else bool_cond loop while elsop
+
 
 %%
 
@@ -158,12 +169,53 @@ decl_list : decl_list decl PV   {}
 decl: var_decl                  {}
 ;
 
-var_decl : type vlist          {}
+var_decl :
+      type  vlist
+      {}
 ;
 
-vlist: vlist vir ID            {} // récursion gauche pour traiter les variables déclararées de gauche à droite
-| ID                           {}
+
+vlist :
+      vlist VIR ID
+{
+    attribute a = makeSymbol($<type_value>0, offset, depth);
+    set_symbol_value($3, a);
+
+    if (a->type == INT)
+        printf("    LOADI(0);\n");
+    else
+        printf("    LOADF(0.0);\n");
+
+    //printf("    LOADI(%d);\n", a->offset);
+    //printf("    STORE;\n");
+
+    offset++;
+}
+| ID
+{
+    attribute a = makeSymbol($<type_value>0, offset, depth);
+    set_symbol_value($1, a);
+
+    if (a->type == INT)
+        printf("    LOADI(0);\n");
+    else
+        printf("    LOADF(0.0);\n");
+
+    //printf("    LOADI(%d);\n", a->offset);
+    //printf("    STORE;\n");
+
+    offset++;
+}
 ;
+
+
+
+
+
+
+
+
+
 
 type
 : typename                     {}
@@ -206,17 +258,30 @@ af : AF                       {}
 // IV.1 Affectations
 aff : ID EQ exp
 {
-    attribute  a = get_symbol_value($1);
-    //verification du type
-    if (a->type != $3) {
-        // promotion int -> float si besoin
-        if (a->type == FLOAT && $3 == INT) {
-            printf("    I2F;\n");
-        } else {
-            yyerror("Type mismatch in assignment to variable ");
-        }
+        attribute a = get_symbol_value($1);
+    if (a == NULL)
+        yyerror("Variable non déclarée");
+
+    int tvar = a->type;
+    int texp = $3;
+
+    // Conversion INT -> FLOAT si nécessaire
+    if (tvar == FLOAT && texp == INT) {
+        printf("    I2F;\n");
     }
 
+    // Erreur si FLOAT → INT
+    if (tvar == INT && texp == FLOAT) {
+        yyerror("Assignation float vers int interdite");
+    }
+
+    // Charger l'adresse de la variable
+    printf("    LOADI(%d);\n", a->offset);
+
+    // STORE : stocke la valeur dans la variable
+    printf("    STORE;\n");
+
+    $$ = tvar;   
 
 }
 
@@ -232,17 +297,51 @@ ret : RETURN exp              {}
 //           avec ELSE en entrée (voir y.output)
 
 cond :
-if bool_cond inst  elsop       {}
+    if bool_cond inst elsop
+    {
+        
+        printf("Lend_%d:\n", $1);
+    }
 ;
 
-elsop : else inst              {}
-|                  %prec IFX   {} // juste un "truc" pour éviter le message de conflit shift / reduce
+
+
+
+elsop :
+    else inst
+{
+    int lbl = $<label_value>-2;   // le label du IF
+    printf("    GOTO(Lend_%d);\n", lbl);
+    printf("Lfalse_%d:\n", lbl);
+}
+| %prec IFX
+{
+    int lbl = $<label_value>-1;   // le label du IF
+    printf("Lfalse_%d:\n", lbl);
+}
 ;
 
-bool_cond : PO exp PF         {}
+
+
+
+bool_cond :
+    PO exp PF
+{
+    int lbl = $<label_value>-1;   // récupère le label du IF
+    printf("    IFN(Lfalse_%d);\n", lbl);
+    $$ = lbl;
+}
 ;
 
-if : IF                       {}
+
+
+
+if : IF                       {
+    int label = newLabel();
+    $$ = label;
+  
+    
+}
 ;
 
 else : ELSE                   {}
@@ -339,6 +438,23 @@ exp
     $$ = $2;
   }
 
+| ID
+{
+    attribute a = get_symbol_value($1);
+    if (a == NULL) {
+        yyerror("Variable non declaree");
+    }
+
+    // Charger la valeur gauche
+    printf("    LOADI(%d);\n", a->offset);
+
+    // Charger la valeur droite
+    printf("    LOAD;\n");
+
+    $$ = a->type;
+}
+
+
 
 
 
@@ -423,8 +539,8 @@ if ($1 == FLOAT && $3 == INT) {
 
 ;
 // V.3 Applications de fonctions
-/*
 
+/*
 app : fid PO args PF          {}
 ;
 
