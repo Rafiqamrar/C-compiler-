@@ -298,7 +298,9 @@ ret : RETURN exp              {}
 
 cond :
     if bool_cond inst elsop
-    {}
+    {
+      newLabel();
+    }
 ;
 
 
@@ -307,10 +309,13 @@ cond :
 elsop :
     else inst
 {
-  printf("Lend_%d;\n", label_counter);
+  printf("Lend_%d:\n", label_counter);
 }
 | %prec IFX
-{}
+{
+  printf("Lfalse_%d:\n", label_counter);
+  printf("Lend_%d:\n", label_counter);
+}
 ;
 
 
