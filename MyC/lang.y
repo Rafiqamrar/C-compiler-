@@ -262,26 +262,26 @@ aff : ID EQ exp
     if (a == NULL)
         yyerror("Variable non déclarée");
 
-    int tvar = a->type;
-    int texp = $3;
+    int type_var = a->type;
+    int type_exp = $3;
 
     // Conversion INT -> FLOAT si nécessaire
-    if (tvar == FLOAT && texp == INT) {
+    if (type_var == FLOAT && type_exp == INT) {
         printf("    I2F;\n");
     }
 
     // Erreur si FLOAT → INT
-    if (tvar == INT && texp == FLOAT) {
+    if (type_var == INT && type_exp == FLOAT) {
         yyerror("Assignation float vers int interdite");
     }
 
     // Charger l'adresse de la variable
-    printf("    LOADI(%d);\n", a->offset);
+    printf("    LOADA(%d);\n", a->offset);
 
     // STORE : stocke la valeur dans la variable
     printf("    STORE;\n");
 
-    $$ = tvar;   
+    $$ = type_var;   
 
 }
 
@@ -298,10 +298,7 @@ ret : RETURN exp              {}
 
 cond :
     if bool_cond inst elsop
-    {
-        
-        printf("Lend_%d:\n", $1);
-    }
+    {}
 ;
 
 
@@ -310,15 +307,10 @@ cond :
 elsop :
     else inst
 {
-    int lbl = $<label_value>-2;   // le label du IF
-    printf("    GOTO(Lend_%d);\n", lbl);
-    printf("Lfalse_%d:\n", lbl);
+  printf("Lend_%d;\n", label_counter);
 }
 | %prec IFX
-{
-    int lbl = $<label_value>-1;   // le label du IF
-    printf("Lfalse_%d:\n", lbl);
-}
+{}
 ;
 
 
@@ -327,24 +319,20 @@ elsop :
 bool_cond :
     PO exp PF
 {
-    int lbl = $<label_value>-1;   // récupère le label du IF
-    printf("    IFN(Lfalse_%d);\n", lbl);
-    $$ = lbl;
+    printf("    IFN(Lfalse_%d);\n", label_counter);
 }
 ;
 
 
 
 
-if : IF                       {
-    int label = newLabel();
-    $$ = label;
-  
-    
-}
+if : IF                       {}
 ;
 
-else : ELSE                   {}
+else : ELSE                   {
+  printf("    GOTO(Lend_%d);\n", label_counter);
+  printf("Lfalse_%d:\n", label_counter);
+}
 ;
 
 // IV.4. Iterations
