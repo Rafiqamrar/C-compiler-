@@ -237,7 +237,7 @@ pv : PV                       {}
 ;
  
 inst:
-ao block af                   {}
+ao block af                   
 | exp pv                      {}
 | aff pv                      {}
 | ret pv                      {}
@@ -298,17 +298,19 @@ ret : RETURN exp              {}
 
 cond :
     if {
-      newLabel();
+      $1 = newLabel();
     }
-    bool_cond 
+    bool_cond {
+      printf("    IFN(Lfalse_%d);\n", $1);
+    }
     inst
     {
-      printf("    GOTO(Lend_%d);\n", label_counter);
-      printf("Lfalse_%d:\n", label_counter);
+      printf("    GOTO(Lend_%d);\n", $1);
+      printf("Lfalse_%d:\n", $1);
     } 
     elsop
     {
-      printf("Lend_%d:\n", label_counter);
+      printf("Lend_%d:\n", $1);
     }
 ;
 
@@ -330,10 +332,7 @@ elsop :
 
 
 bool_cond :
-    PO exp PF
-{
-    printf("    IFN(Lfalse_%d);\n", label_counter);
-}
+    PO exp PF                 {}
 ;
 
 
@@ -349,23 +348,28 @@ else : ELSE                   {
 // IV.4. Iterations
 
 loop:
+{
+    printf("Loop_%d:\n", newLabel());
+}
     while 
+    {
+      $2 = newLabel() - 1;
+    }
     while_cond
+    {
+      printf("    IFN(EndLoop_%d);\n", $2);
+    }
     inst
 {
-    printf("    GOTO(Loop_%d);\n", label_counter);   // retour au début
-    printf("EndLoop_%d:\n", label_counter);
+    printf("    GOTO(Loop_%d);\n", $2);   // retour au début
+    printf("EndLoop_%d:\n", $2);
 }
 ;
 
-while_cond : PO exp PF        {
-  printf("    IFN(EndLoop_%d);\n", label_counter);
-}
+while_cond : PO exp PF        {}
 ;
 
-while : WHILE                 {
-  printf("Loop_%d:\n", label_counter);
-}
+while : WHILE                 {}
 ;
 
 // V. Expressions
