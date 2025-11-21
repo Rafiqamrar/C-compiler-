@@ -297,9 +297,18 @@ ret : RETURN exp              {}
 //           avec ELSE en entrée (voir y.output)
 
 cond :
-    if bool_cond inst elsop
-    {
+    if {
       newLabel();
+    }
+    bool_cond 
+    inst
+    {
+      printf("    GOTO(Lend_%d);\n", label_counter);
+      printf("Lfalse_%d:\n", label_counter);
+    } 
+    elsop
+    {
+      printf("Lend_%d:\n", label_counter);
     }
 ;
 
@@ -309,12 +318,11 @@ cond :
 elsop :
     else inst
 {
-  printf("Lend_%d:\n", label_counter);
 }
 | %prec IFX
 {
-  printf("Lfalse_%d:\n", label_counter);
-  printf("Lend_%d:\n", label_counter);
+  
+  
 }
 ;
 
@@ -335,24 +343,30 @@ if : IF                       {}
 ;
 
 else : ELSE                   {
-  printf("    GOTO(Lend_%d);\n", label_counter);
-  printf("Lfalse_%d:\n", label_counter);
 }
 ;
 
 // IV.4. Iterations
 
-loop : while while_cond inst  {}
+loop:
+    while 
+    while_cond
+    inst
+{
+    printf("    GOTO(Loop_%d);\n", label_counter);   // retour au début
+    printf("EndLoop_%d:\n", label_counter);
+}
 ;
 
-while_cond : PO exp PF        {}
-
-while : WHILE                 {}
+while_cond : PO exp PF        {
+  printf("    IFN(EndLoop_%d);\n", label_counter);
+}
 ;
 
-
-// V. Expressions
-
+while : WHILE                 {
+  printf("Loop_%d:\n", label_counter);
+}
+;
 
 // V. Expressions
 
