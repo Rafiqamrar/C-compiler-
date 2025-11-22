@@ -26,6 +26,57 @@ int newLabel() {
 }
 
 
+void reset_offset() {
+    offset = 0;
+}
+
+void enter_block() {
+    if (depth > 1) {  // Functions and sub-blocks
+        printf("    SAVEBP;\n");
+    }
+    depth++;
+    reset_offset();
+}
+void exit_block() {
+    depth--;
+    //printf("    // DEBUG: exit_block() - new_depth=%d\n", depth);
+    if (depth > 1) {
+        printf("    RESTOREBP;\n");
+    }
+}
+
+
+void generate_variable_address(attribute a) {
+    if (a == NULL) {
+        printf("    // ERREUR: Variable non trouvée\n");
+        return;
+    }
+    
+    //printf("    // DEBUG: Variable depth=%d, offset=%d, current_depth=%d\n", 
+           //a->depth, a->offset, depth);
+    
+    if (a->depth == depth) {
+        // Variable locale
+        printf("    LOADBP; \n");
+        printf("    SHIFT(%d);\n", a->offset + 1);
+    } else if (a->depth == 0) {
+        // Variable globale
+        printf("    LOADI(0);\n");
+
+        //printf("   SHIFT(%d); \n", a->offset);
+        
+        
+    } else {
+        // Variable parente
+        printf("    LOADBP;\n");
+        for (int i = depth; i > a->depth; i--) {
+        printf("    LOAD;\n ");
+        }
+        printf("    SHIFT(%d); \n", a->offset + 1);
+    }
+}
+
+
 %}
 
 %union { 
@@ -83,7 +134,7 @@ char * type2string (int c) {
 void end_glob_var_decl(){
   static int unfinished=1;
   if (unfinished) {
-    unfinished = 0;
+    unfinished = 0; 
     printf("}\n\n");
   }
 }
@@ -146,7 +197,16 @@ params: type ID vir params     {} // récursion droite pour numéroter les param
 vir : VIR                      {}
 ;
 
-fun_body : fao block faf       {}
+fun_body :{
+
+printf("void pcode_%s() {\n", "main");
+        enter_block();  // ← Crée le contexte fonction
+        reset_offset();
+}
+ fao block faf       {
+        exit_block();   // ← Détruit le contexte fonction
+        printf("}\n\n");
+ }
 ;
 
 fao : AO                       {}
@@ -156,9 +216,19 @@ faf : AF                       {}
 
 
 // II. Block
+
 block:
-decl_list inst_list            {}
-;
+    { 
+        if (depth >= 1) { // Sous-blocs seulement (pas pour le bloc fonction)
+            enter_block();
+        }
+    }
+    decl_list inst_list 
+    { 
+        if (depth >= 1) { // Sous-blocs seulement
+            exit_block();
+        }
+    }
 
 // III. Declarations
 
@@ -180,7 +250,7 @@ vlist :
 {
     attribute a = makeSymbol($<type_value>0, offset, depth);
     set_symbol_value($3, a);
-
+    //printf("    // DECL %s: depth=%d, offset=%d\n", $3, depth, offset); //DEBUG
     if (a->type == INT)
         printf("    LOADI(0);\n");
     else
@@ -229,7 +299,8 @@ typename // Utilisation des terminaux comme codage (entier) du type !!!
 
 // IV. Intructions
 
-inst_list: inst_list inst   {} 
+inst_list: inst_list decl PV   {} 
+|inst_list inst          {}
 | inst                      {}
 ;
 
@@ -276,8 +347,8 @@ aff : ID EQ exp
     }
 
     // Charger l'adresse de la variable
-    printf("    LOADA(%d);\n", a->offset);
-
+    //printf("    LOADI(%d);\n", a->offset);
+    generate_variable_address(a);
     // STORE : stocke la valeur dans la variable
     printf("    STORE;\n");
 
@@ -334,6 +405,8 @@ elsop :
 bool_cond :
     PO exp PF                 {}
 ;
+
+
 
 
 
@@ -457,8 +530,8 @@ exp
     }
 
     // Charger la valeur gauche
-    printf("    LOADI(%d);\n", a->offset);
-
+    //printf("    LOADI(%d);\n", a->offset);
+    generate_variable_address(a);
     // Charger la valeur droite
     printf("    LOAD;\n");
 
@@ -540,11 +613,13 @@ if ($1 == FLOAT && $3 == INT) {
   }
 | exp AND exp
   {
-    yyerror("AND non implementé en version non paresseuse");
+    //yyerror("AND non implementé en version non paresseuse");
+    
+
   }
 | exp OR exp
   {
-    yyerror("OR non implementé en version non paresseuse");
+    //yyerror("OR non implementé en version non paresseuse");
   }
 
 
