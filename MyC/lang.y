@@ -622,16 +622,29 @@ if ($1 == FLOAT && $3 == INT) {
     // $$ = INT;
     yyerror("NOT/AND/OR non implementés (option booléens paresseux)");
   }
-| exp AND exp
+| exp 
   {
     //yyerror("AND non implementé en version non paresseuse");
-    
-
+    int label = newLabel();
+    $1 = label;
+    printf("    IFN(Lfalse_%d);\n", $1);
   }
-| exp OR exp
+  AND exp
   {
-    //yyerror("OR non implementé en version non paresseuse");
+    printf("Lfalse_%d:\n", $1);
   }
+
+| exp {
+    //yyerror("OR non implementé en version non paresseuse");
+    int label = newLabel();
+    $1 = label;
+    printf("    IFT(Ltrue_%d);\n", $1);
+  }
+  OR exp
+  {
+    printf("Ltrue_%d:\n", $1);
+  }
+  
 
 
 ;
