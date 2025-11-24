@@ -180,30 +180,41 @@ fun : type fun_head fun_body   {}
 po: PO {end_glob_var_decl();}  // dirty trick to end function init_glob_var() definition in target code
   
 fun_head : ID po PF            {
+  printf("%s pcode_%s(){\n", type2string($<type_value>0), $1);
   // Pas de déclaration de fonction à l'intérieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
   }
 
-| ID po params PF              {
+| ID po 
+{
+  printf("%s pcode_%s(", type2string($<type_value>0), $1);
+}
+params PF              {
    // Pas de déclaration de fonction à l'intérieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
+  printf("){\n");
  }
 ;
 
-params: type ID vir params     {} // récursion droite pour numéroter les paramètres du dernier au premier
-| type ID                      {}
-
-
-vir : VIR                      {}
+params: type ID 
+{
+  printf("%s %s ", type2string($1), $2);
+}
+vir params      // récursion droite pour numéroter les paramètres du dernier au premier
+| type ID                      {
+  printf("%s %s ", type2string($1), $2);
+}
 ;
 
-fun_body :{
 
-printf("void pcode_%s() {\n", "main");
+vir : VIR                      {printf(", ");}
+;
+
+fun_body : {
         enter_block();  // ← Crée le contexte fonction
         reset_offset();
-}
- fao block faf       {
+} 
+  fao block faf    {}   {
         exit_block();   // ← Détruit le contexte fonction
         printf("}\n\n");
  }
@@ -291,8 +302,8 @@ type
 : typename                     {}
 ;
 
-typename // Utilisation des terminaux comme codage (entier) du type !!!
-: INT                          {$$=INT;} 
+typename : // Utilisation des terminaux comme codage (entier) du type !!!
+  INT                          {$$=INT;} 
 | FLOAT                        {$$=FLOAT;}
 | VOID                         {$$=VOID;}
 ;
