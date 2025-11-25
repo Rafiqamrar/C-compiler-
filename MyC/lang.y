@@ -759,7 +759,13 @@ if ($1 == FLOAT && $3 == INT) {
   }
   AND exp
   {
+    printf("    IFT(Ltrue_%d);\n", $1);
     printf("Lfalse_%d:\n", $1);
+    printf("    LOADI(0);\n");
+    printf("    GOTO(Lend_%d);\n", $1);
+    printf("Ltrue_%d:\n", $1);
+    printf("    LOADI(1);\n");
+    printf("Lend_%d:\n", $1);
   }
 
 | exp {
@@ -770,7 +776,13 @@ if ($1 == FLOAT && $3 == INT) {
   }
   OR exp
   {
+    printf("    IFN(Lfalse_%d);\n",$1);
     printf("Ltrue_%d:\n", $1);
+    printf("    LOADI(1);\n");
+    printf("    GOTO(Lend_%d);\n", $1);
+    printf("Lfalse_%d:\n", $1);
+    printf("    LOADI(0);\n");
+    printf("Lend_%d:\n", $1);
   }
   
 
