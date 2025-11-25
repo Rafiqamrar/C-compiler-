@@ -17,17 +17,21 @@ void yyerror (char* s) {
 		
 int depth=0; // block depth
 int offset=0; // variable offset in current block
+int param_offset=-1; // parameter offset in current function
 int current_decl_type; // type of current declaration (used in vlist)
  
 int label_counter = 0;
 
 int newLabel() {
+
     return label_counter++;
 }
 
 
 void reset_offset() {
     offset = 0;
+    param_offset = -1;
+
 }
 
 void enter_block() {
@@ -51,17 +55,23 @@ void generate_variable_address(attribute a) {
         printf("    // ERREUR: Variable non trouvée\n");
         return;
     }
-    
-    //printf("    // DEBUG: Variable depth=%d, offset=%d, current_depth=%d\n", 
-           //a->depth, a->offset, depth);
+
+    printf("    // generate_variable_address: depth=%d, offset=%d\n", a->depth, a->offset);
+
     
     if (a->depth == depth) {
-        // Variable locale
-        printf("    LOADBP; \n");
-        printf("    SHIFT(%d);\n", a->offset + 1);
+        if (a->offset >= 0) {
+            // Variable locale
+            printf("    LOADBP; \n");
+            printf("    SHIFT(%d);\n", a->offset + 1);
+        } else {
+            // Paramètre (offset négatif)
+            printf("    LOADBP; \n");
+            printf("    SHIFT(%d);\n", a->offset); 
+        }
     } else if (a->depth == 0) {
         // Variable globale
-        printf("    LOADI(0);\n");
+        printf("    LOADI(%d);\n" , a->offset);
 
         //printf("   SHIFT(%d); \n", a->offset);
         
@@ -70,11 +80,57 @@ void generate_variable_address(attribute a) {
         // Variable parente
         printf("    LOADBP;\n");
         for (int i = depth; i > a->depth; i--) {
-        printf("    LOAD;\n ");
+        
         }
-        printf("    SHIFT(%d); \n", a->offset + 1);
+            if (a->offset >= 0) {
+            printf("    LOAD;\n ");
+            // Variable locale du parent
+            printf("    SHIFT(%d);\n", a->offset + 1);
+        } else {
+            // Paramètre du parent  
+            printf("    SHIFT(%d);\n", a->offset);
+        }
     }
 }
+
+
+
+
+// Variables globales ajoutées
+char *current_function_name = NULL;
+int current_function_param_count = 0;
+
+void start_function(char *name) {
+    current_function_name = name;
+    current_function_param_count = 0;
+}
+
+void add_parameter() {
+    current_function_param_count++;
+    printf("// DEBUG: add_parameter - count now=%d\n", current_function_param_count);
+}
+
+void end_function() {
+    current_function_name = NULL;
+    current_function_param_count = 0;
+}
+
+void register_function(char *name, int return_type, int param_count) {
+    // Utiliser offset = -1 pour identifier les fonctions
+    // depth = 0 pour les fonctions globales
+    attribute func_attr = makeSymbol(return_type, -param_count, 0);
+    set_symbol_value(name, func_attr);
+    //debug
+ printf("// DEBUG: Registered function %s with %d params (offset=%d)\n", 
+           name, param_count, -param_count);
+}
+
+// Vérifier si un symbole est une fonction
+int is_function(attribute a) {
+    return (a != NULL && a->offset == -1 && a->depth == 0);
+}
+
+
 
 
 %}
@@ -103,6 +159,7 @@ void generate_variable_address(attribute a) {
 %token <label_value> AND OR NOT DIFF EQUAL SUP INF
 %token PLUS MOINS STAR DIV
 %token DOT ARR
+//%token <string_value> FID
 
 %nonassoc IFX
 %left OR                       // higher priority on ||
@@ -151,6 +208,9 @@ void end_glob_var_decl(){
 %type <string_value> fun_head
 %type <type_value> aff
 %type <label_value> cond if else bool_cond loop while elsop
+%type <type_value> app ret
+%type <string_value> fid 
+%type <int_value> params arglist 
 
 
 %%
@@ -165,6 +225,7 @@ glob_decl_list : glob_var_list glob_fun_list {}
 
 glob_var_list : glob_var_list decl PV {}
 | {printf("void init_glob_var(){\n"); // starting  function init_glob_var() definition in target code
+  reset_offset();  // reset offset for global variables
  }
 ;
 
@@ -174,7 +235,9 @@ glob_fun_list : glob_fun_list fun {}
 
 // I. Functions
 
-fun : type fun_head fun_body   {}
+fun : type fun_head fun_body   {
+
+}
 ;
 
 po: PO {end_glob_var_decl();}  // dirty trick to end function init_glob_var() definition in target code
@@ -182,30 +245,79 @@ po: PO {end_glob_var_decl();}  // dirty trick to end function init_glob_var() de
 fun_head : ID po PF            {
   // Pas de déclaration de fonction à l'intérieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
+  start_function($1);
+  //reset offset for parameters
+  param_offset = -1;
+
+
   }
 
 | ID po params PF              {
    // Pas de déclaration de fonction à l'intérieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
+  start_function($1);
+  param_offset = -1;
+  register_function($1, $<type_value>0, $3);
+
+
  }
 ;
 
-params: type ID vir params     {} // récursion droite pour numéroter les paramètres du dernier au premier
-| type ID                      {}
+
+params : type ID vir params
+{
+    // Paramètre: type 1, nom 2
+    // Attribuer offset NÉGATIF
+    int current_offset = param_offset;
+    attribute a = makeSymbol($1, current_offset, 1); // depth=1, offset négatif
+    set_symbol_value($2, a);
+    printf("// DEBUG: Paramètre %s - offset=%d (avant offset--)\n", $2, current_offset);
+
+    param_offset--;
+    add_parameter();
+    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    $$ =current_function_param_count;
+
+
+    
+}
+| type ID
+{
+    // Dernier paramètre
+    attribute a = makeSymbol($1, param_offset, 1);
+    set_symbol_value($2, a);
+    printf("// DEBUG: Dernier paramètre %s - offset=%d (avant offset--)\n", $2, param_offset);
+    param_offset--;
+    add_parameter();
+    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    $$ =current_function_param_count;
+
+}
+;
 
 
 vir : VIR                      {}
 ;
 
 fun_body :{
+   if (current_function_name == NULL) {
+        yyerror("No current function name!");
+    }
 
-printf("void pcode_%s() {\n", "main");
-        enter_block();  // ← Crée le contexte fonction
-        reset_offset();
+        printf("void pcode_%s() {\n", current_function_name);
+
+        //register_function(current_function_name, $<type_value>0, current_function_param_count);
+        printf("    // Fonction %s: type=%s, params=%d\n", 
+               current_function_name, type2string($<type_value>0), current_function_param_count);
+        
+        enter_block(); 
+
 }
  fao block faf       {
         exit_block();   // ← Détruit le contexte fonction
+
         printf("}\n\n");
+        end_function();
  }
 ;
 
@@ -258,6 +370,7 @@ vlist :
 
     //printf("    LOADI(%d);\n", a->offset);
     //printf("    STORE;\n");
+    
 
     offset++;
 }
@@ -329,7 +442,7 @@ af : AF                       {}
 // IV.1 Affectations
 aff : ID EQ exp
 {
-        attribute a = get_symbol_value($1);
+    attribute a = get_symbol_value($1);
     if (a == NULL)
         yyerror("Variable non déclarée");
 
@@ -346,6 +459,7 @@ aff : ID EQ exp
         yyerror("Assignation float vers int interdite");
     }
 
+
     // Charger l'adresse de la variable
     //printf("    LOADI(%d);\n", a->offset);
     generate_variable_address(a);
@@ -357,9 +471,67 @@ aff : ID EQ exp
 }
 
 
+
+
+
+
 // IV.2 Return
-ret : RETURN exp              {}
-| RETURN PO PF                {}
+ret : RETURN exp
+{
+    if (current_function_name == NULL) {
+        yyerror("Return outside function!");
+    }
+    
+    // Récupérer le type de la fonction depuis la table
+    attribute func_attr = get_symbol_value(current_function_name);
+    if (func_attr == NULL) {
+        yyerror("Current function not found");
+    }
+    
+    int function_type = func_attr->type;
+    int expr_type = $2;
+    
+    //check_return_compatibility(function_type, expr_type);
+    //check type compatibility
+    if (function_type == INT && expr_type == FLOAT) {
+        yyerror("Cannot return float from int function");
+    }
+    if (function_type == VOID) {
+        yyerror("Void function cannot return a value");
+    }
+    if (function_type == INT && expr_type == FLOAT) {
+          printf("    I2F;\n");
+    }
+    // Conversion si nécessaire
+    if (function_type == FLOAT && expr_type == INT) {
+        printf("    I2F;\n");
+    }
+    
+    int param_count = -func_attr->offset;
+    int return_offset = -(param_count + 1);
+    
+    printf("    LOADBP;\n");
+    printf("    SHIFT(%d);\n", return_offset);
+    printf("    STORE; \n");
+
+    
+    $$ = function_type;
+}
+| RETURN PO PF
+{
+    if (current_function_name == NULL) {
+        yyerror("Return outside function!");
+    }
+    
+    attribute func_attr = get_symbol_value(current_function_name);
+    if (func_attr && func_attr->type != VOID) {
+        yyerror("Non-void function should return a value");
+    }
+    
+
+    
+    $$ = VOID;
+}
 ;
 
 // IV.3. Conditionelles
@@ -537,6 +709,11 @@ exp
 
     $$ = a->type;
 }
+| app  // permettre les appels de fonction comme expressions
+  {
+    $$ = $1;  // Reprend le type déterminé dans la règle app
+  }
+;
 
 
 
@@ -552,12 +729,14 @@ exp
     } else if ($1 == INT && $3 == FLOAT) {
         printf("    I2F1;\n");
     }
-    if ($1 == FLOAT && $3 == INT) {    
+    if ($1 == INT && $3 == INT) {    
       printf("    LTI;\n");   // < sur int (ou float casté dans PCode)
       $$ = INT;
 
+}   else {
+      printf("    LTF;\n");   // < sur int (ou float casté dans PCode)
+
 }
-    printf("    LTF;\n");   // < sur int (ou float casté dans PCode)
     $$ = INT;
   }
 | exp SUP exp
@@ -567,12 +746,13 @@ if ($1 == FLOAT && $3 == INT) {
     } else if ($1 == INT && $3 == FLOAT) {
         printf("    I2F1;\n");
     }
-    if ($1 == FLOAT && $3 == INT) {    
+    if ($1 == INT && $3 == INT) {    
       printf("    GTI;\n");   // < sur int (ou float casté dans PCode)
       $$ = INT;
 
+}  else {
+      printf("    GTF;\n");   // < sur int (ou float casté dans PCode) ;
 }
-    printf("    GTF;\n");   // < sur int (ou float casté dans PCode)
     $$ = INT;
   }
 | exp EQUAL exp
@@ -582,12 +762,13 @@ if ($1 == FLOAT && $3 == INT) {
     } else if ($1 == INT && $3 == FLOAT) {
         printf("    I2F1;\n");
     }
-    if ($1 == FLOAT && $3 == INT) {    
+    if ($1 == INT && $3 == INT) {    
       printf("    EQI;\n");   // < sur int (ou float casté dans PCode)
       $$ = INT;
 
-}
+}else { 
     printf("    EQF;\n");   // < sur int (ou float casté dans PCode)
+}
     $$ = INT;
   }
 | exp DIFF exp
@@ -613,7 +794,9 @@ if ($1 == FLOAT && $3 == INT) {
   }
 | exp AND exp
   {
-    //yyerror("AND non implementé en version non paresseuse");
+   int L1 = newLabel();
+   //compile $1 si vrai fais le suivant sinon saute a L1
+
     
 
   }
@@ -626,20 +809,59 @@ if ($1 == FLOAT && $3 == INT) {
 ;
 // V.3 Applications de fonctions
 
-/*
-app : fid PO args PF          {}
+
+app : fid PO {printf("    LOADI(0);\n");}  args PF
+{
+    attribute func_attr = get_symbol_value($1);
+    if (func_attr == NULL) {
+        yyerror("Function not declared");
+    }
+    
+    int return_type = func_attr->type;
+    int param_count = -func_attr->offset;
+    
+  
+    
+    // Les arguments sont déjà empilés par 'args'
+    
+    printf("    SAVEBP;\n");
+    printf("    CALL(pcode_%s);\n", $1);
+    printf("    RESTOREBP;\n");
+    
+    // Dépiler les arguments
+    //printf("    //les nombres d'arguments: %d\n", param_count); // debug
+   printf("    DROP(%d);   // Depilement arguments\n", param_count);
+        
+    // Si fonction void, rien n'est empilé, sinon la valeur de retour est au sommet
+    $$ = return_type;
+}
 ;
 
-fid : ID                      {}
+fid : ID                      {$$ = $1;}
 
-args :  arglist               {}
+args :  arglist               {
+}
 |                             {}
 ;
 
-arglist : arglist VIR exp     {} // récursion gauche pour empiler les arguements de la fonction de gauche à droite
-| exp                         {}
-;
-*/
+arglist : arglist VIR exp {
+    // Conversion automatique INT → FLOAT si nécessaire
+    if ($3 == INT) {
+        // On pourrait convertir vers float si le paramètre attend float
+        // Pour l'instant, on accepte tous les int
+    } else if ($3 == FLOAT) {
+        // On accepte les float
+    }
+  
+}
+| exp {
+    if ($1 == INT) {
+        // Accepté
+    } else if ($1 == FLOAT) {
+        // Accepté  
+    }
+}
+
 
 
 
@@ -652,19 +874,36 @@ int main () {
      sur ce fichier pour lancer dessus la compilation.
    */
 
-char * header=
-"// PCode Header\n\
-#include \"PCode.h\"\n\
-\n\
-void pcode_main();\n\
-void init_glob_var();\n\
-\n\
-int main() {\n\
-init_glob_var();\n\
-pcode_main();\n\
-return stack[sp-1].int_value;\n\
-}\n\
-\n";  
+char * header =
+"// PCode Header\n"
+"#include \"PCode/PCode.h\"\n"
+"#include <stdio.h>\n"
+"\n"
+"void pcode_main();\n"
+"void init_glob_var();\n"
+"\n"
+"int main() {\n"
+"    printf(\"=== DEBUT EXECUTION ===\\n\");\n"
+"    init_glob_var();\n"
+"    pcode_main();\n"
+"    \n"
+"    // Affichage debug\n"
+"    printf(\"Stack pointer: %d\\n\", sp);\n"
+"    printf(\"Contenu de la pile:\\n\");\n"
+"    for (int i = 0; i < sp; i++) {\n"
+"        printf(\"  stack[%d] = %d\\n\", i, stack[i].int_value);\n"
+"    }\n"
+"    \n"
+"    printf(\"Variables globales: x=%d, y=%d, z=%d\\n\", \n"
+"           stack[0].int_value, stack[1].int_value, stack[2].int_value);\n"
+"    \n"
+"    int result = stack[sp-1].int_value;\n"
+"    printf(\"Valeur de retour: %d\\n\", result);\n"
+"    printf(\"=== FIN EXECUTION ===\\n\");\n"
+"    \n"
+"    return result;\n"
+"}\n"
+"\n"; 
 
 printf("%s\n",header); // ouput header
   
