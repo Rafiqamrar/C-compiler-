@@ -1,6 +1,4 @@
 %{
-
-
 #include "Table_des_symboles.h"
 
 #include <stdio.h>
@@ -17,6 +15,7 @@ void yyerror (char* s) {
 		
 int depth=0; // block depth
 int offset=0; // variable offset in current block
+int param_offset=-1; // parameter offset in current function
 int current_decl_type; // type of current declaration (used in vlist)
  
 int label_counter = 0;
@@ -74,6 +73,40 @@ void generate_variable_address(attribute a) {
         }
         printf("    SHIFT(%d); \n", a->offset + 1);
     }
+}
+
+// Variables globales ajoutÃ©es
+char *current_function_name = NULL;
+int current_function_param_count = 0;
+
+void start_function(char *name) {
+    current_function_name = name;
+    current_function_param_count = 0;
+}
+
+void add_parameter() {
+    current_function_param_count++;
+    printf("// DEBUG: add_parameter - count now=%d\n", current_function_param_count);
+}
+
+void end_function() {
+    current_function_name = NULL;
+    current_function_param_count = 0;
+}
+
+void register_function(char *name, int return_type, int param_count) {
+    // Utiliser offset = -1 pour identifier les fonctions
+    // depth = 0 pour les fonctions globales
+    attribute func_attr = makeSymbol(return_type, -param_count, 0);
+    set_symbol_value(name, func_attr);
+    //debug
+ printf("// DEBUG: Registered function %s with %d params (offset=%d)\n", 
+           name, param_count, -param_count);
+}
+
+// VÃ©rifier si un symbole est une fonction
+int is_function(attribute a) {
+    return (a != NULL && a->offset == -1 && a->depth == 0);
 }
 
 
@@ -151,6 +184,9 @@ void end_glob_var_decl(){
 %type <string_value> fun_head
 %type <type_value> aff
 %type <label_value> cond if else bool_cond loop while elsop
+%type <type_value> app ret
+%type <string_value> fid 
+%type <int_value> params arglist 
 
 
 %%
@@ -165,6 +201,7 @@ glob_decl_list : glob_var_list glob_fun_list {}
 
 glob_var_list : glob_var_list decl PV {}
 | {printf("void init_glob_var(){\n"); // starting  function init_glob_var() definition in target code
+  reset_offset();  // reset offset for global variables
  }
 ;
 
@@ -180,29 +217,60 @@ fun : type fun_head fun_body   {}
 po: PO {end_glob_var_decl();}  // dirty trick to end function init_glob_var() definition in target code
   
 fun_head : ID po PF            {
-  printf("%s pcode_%s(){\n", type2string($<type_value>0), $1);
+  start_function($1);
+  if (current_function_name == NULL) {
+        yyerror("No current function name!");
+    }
+  printf("%s pcode_%s() {\n", type2string($<type_value>0), current_function_name);
   // Pas de déclaration de fonction à l'intérieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
+  //reset offset for parameters
+  param_offset = -1;
   }
 
-| ID po 
-{
-  printf("%s pcode_%s(", type2string($<type_value>0), $1);
-}
-params PF              {
-   // Pas de déclaration de fonction à l'intérieur de fonctions !
+| ID po params PF              {
+   // Pas de dÃ©claration de fonction Ã  l'intÃ©rieur de fonctions !
+   start_function($1);
   if (depth>0) yyerror("Function must be declared at top level~!\n");
-  printf("){\n");
+  if (current_function_name == NULL) {
+        yyerror("No current function name!");
+    }
+  printf("%s pcode_%s() {\n", type2string($<type_value>0), current_function_name);
+  param_offset = -1;
+  register_function($1, $<type_value>0, $3);
+
+
  }
 ;
 
-params: type ID 
+params : type ID vir params
 {
-  printf("%s %s ", type2string($1), $2);
+    // ParamÃ¨tre: type 1, nom 2
+    // Attribuer offset NÃ‰GATIF
+    int current_offset = param_offset;
+    attribute a = makeSymbol($1, current_offset, 1); // depth=1, offset nÃ©gatif
+    set_symbol_value($2, a);
+    printf("// DEBUG: ParamÃ¨tre %s - offset=%d (avant offset--)\n", $2, current_offset);
+
+    param_offset--;
+    add_parameter();
+    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    $$ =current_function_param_count;
+
+
+    
 }
-vir params      // récursion droite pour numéroter les paramètres du dernier au premier
-| type ID                      {
-  printf("%s %s ", type2string($1), $2);
+| type ID
+{
+    // Dernier paramÃ¨tre
+    attribute a = makeSymbol($1, param_offset, 1);
+    set_symbol_value($2, a);
+    printf("// DEBUG: Dernier paramÃ¨tre %s - offset=%d (avant offset--)\n", $2, param_offset);
+    param_offset--;
+    add_parameter();
+    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    $$ =current_function_param_count;
+
 }
 ;
 
@@ -210,13 +278,19 @@ vir params      // récursion droite pour numéroter les paramètres du dernier 
 vir : VIR                      {printf(", ");}
 ;
 
-fun_body : {
-        enter_block();  // ← Crée le contexte fonction
-        reset_offset();
-} 
-  fao block faf    {}   {
-        exit_block();   // ← Détruit le contexte fonction
+fun_body :{
+        //register_function(current_function_name, $<type_value>0, current_function_param_count);
+        printf("// Fonction %s: type=%s, params=%d\n", 
+               current_function_name, type2string($<type_value>0), current_function_param_count);
+        
+        enter_block(); 
+
+}
+ fao block faf       {
+        exit_block();   // â† DÃ©truit le contexte fonction
+
         printf("}\n\n");
+        end_function();
  }
 ;
 
@@ -369,8 +443,62 @@ aff : ID EQ exp
 
 
 // IV.2 Return
-ret : RETURN exp              {}
-| RETURN PO PF                {}
+ret : RETURN exp
+{
+    if (current_function_name == NULL) {
+        yyerror("Return outside function!");
+    }
+    
+    // RÃ©cupÃ©rer le type de la fonction depuis la table
+    attribute func_attr = get_symbol_value(current_function_name);
+    if (func_attr == NULL) {
+        yyerror("Current function not found");
+    }
+    
+    int function_type = func_attr->type;
+    int expr_type = $2;
+    
+    //check_return_compatibility(function_type, expr_type);
+    //check type compatibility
+    if (function_type == INT && expr_type == FLOAT) {
+        yyerror("Cannot return float from int function");
+    }
+    if (function_type == VOID) {
+        yyerror("Void function cannot return a value");
+    }
+    if (function_type == INT && expr_type == FLOAT) {
+          printf("    I2F;\n");
+    }
+    // Conversion si nÃ©cessaire
+    if (function_type == FLOAT && expr_type == INT) {
+        printf("    I2F;\n");
+    }
+    
+    int param_count = -func_attr->offset;
+    int return_offset = -(param_count + 1);
+    
+    printf("    LOADBP;\n");
+    printf("    SHIFT(%d);\n", return_offset);
+    printf("    STORE; \n");
+
+    
+    $$ = function_type;
+}
+| RETURN PO PF
+{
+    if (current_function_name == NULL) {
+        yyerror("Return outside function!");
+    }
+    
+    attribute func_attr = get_symbol_value(current_function_name);
+    if (func_attr && func_attr->type != VOID) {
+        yyerror("Non-void function should return a value");
+    }
+    
+
+    
+    $$ = VOID;
+}
 ;
 
 // IV.3. Conditionelles
@@ -650,21 +778,57 @@ if ($1 == FLOAT && $3 == INT) {
 ;
 // V.3 Applications de fonctions
 
-/*
-app : fid PO args PF          {}
+app : fid PO {printf("    LOADI(0);\n");}  args PF
+{
+    attribute func_attr = get_symbol_value($1);
+    if (func_attr == NULL) {
+        yyerror("Function not declared");
+    }
+    
+    int return_type = func_attr->type;
+    int param_count = -func_attr->offset;
+    
+  
+    
+    // Les arguments sont dÃ©jÃ  empilÃ©s par 'args'
+    
+    printf("    SAVEBP;\n");
+    printf("    CALL(pcode_%s);\n", $1);
+    printf("    RESTOREBP;\n");
+    
+    // DÃ©piler les arguments
+    //printf("    //les nombres d'arguments: %d\n", param_count); // debug
+   printf("    DROP(%d);   // Depilement arguments\n", param_count);
+        
+    // Si fonction void, rien n'est empilÃ©, sinon la valeur de retour est au sommet
+    $$ = return_type;
+}
 ;
 
-fid : ID                      {}
+fid : ID                      {$$ = $1;}
 
-args :  arglist               {}
+args :  arglist               {
+}
 |                             {}
 ;
 
-arglist : arglist VIR exp     {} // récursion gauche pour empiler les arguements de la fonction de gauche à droite
-| exp                         {}
-;
-*/
-
+arglist : arglist VIR exp {
+    // Conversion automatique INT â†’ FLOAT si nÃ©cessaire
+    if ($3 == INT) {
+        // On pourrait convertir vers float si le paramÃ¨tre attend float
+        // Pour l'instant, on accepte tous les int
+    } else if ($3 == FLOAT) {
+        // On accepte les float
+    }
+  
+}
+| exp {
+    if ($1 == INT) {
+        // AcceptÃ©
+    } else if ($1 == FLOAT) {
+        // AcceptÃ©  
+    }
+}
 
 
 
