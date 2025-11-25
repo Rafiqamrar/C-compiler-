@@ -79,11 +79,14 @@ void generate_variable_address(attribute a) {
     } else {
         // Variable parente
         printf("    LOADBP;\n");
-        for (int i = depth; i > a->depth; i--) {
-        
+        if (depth - a->depth > 1) {
+            // Monter dans les blocs parents
+            for (int i = 0; i < depth - a->depth - 1; i++) {
+        printf("    LOAD; accessing upper block depth %d\n" , a->depth);            }
         }
-            if (a->offset >= 0) {
-            printf("    LOAD;\n ");
+
+          if (a->offset >= 0) {
+            //printf("    LOAD;\n ");
             // Variable locale du parent
             printf("    SHIFT(%d);\n", a->offset + 1);
         } else {
@@ -451,7 +454,7 @@ aff : ID EQ exp
 
     // Conversion INT -> FLOAT si nécessaire
     if (type_var == FLOAT && type_exp == INT) {
-        printf("    I2F;\n");
+        printf("    I2F2;\n");
     }
 
     // Erreur si FLOAT → INT
@@ -500,18 +503,21 @@ ret : RETURN exp
         yyerror("Void function cannot return a value");
     }
     if (function_type == INT && expr_type == FLOAT) {
-          printf("    I2F;\n");
+          printf("    I2F2;\n");
     }
     // Conversion si nécessaire
     if (function_type == FLOAT && expr_type == INT) {
-        printf("    I2F;\n");
+        printf("      I2F2;\n");
     }
     
     int param_count = -func_attr->offset;
     int return_offset = -(param_count + 1);
+
+    attribute a = makeSymbol(function_type, return_offset, 1); //depth 1 pour fonction
+    generate_variable_address(a);
     
-    printf("    LOADBP;\n");
-    printf("    SHIFT(%d);\n", return_offset);
+    //printf("    LOADBP;\n");
+    //printf("    SHIFT(%d);\n", return_offset);
     printf("    STORE; \n");
 
     
