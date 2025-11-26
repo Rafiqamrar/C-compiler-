@@ -567,17 +567,22 @@ cond :
       $1 = newLabel();
     }
     bool_cond {
-      printf("    IFN(Lfalse_%d);\n", $1);
+      printf("    IFN(False_%d);\n", $1);
     }
     inst
     {
-      printf("    GOTO(Lend_%d);\n", $1);
-      printf("Lfalse_%d:\n", $1);
+      printf("    // la condition %d est vraie\n", $1);
+      //printf("    GOTO(End_%d);\n", $1);
+      printf("False_%d:\n", $1);
+      printf("    // la condition %d est fausse\n", $1);
     } 
     elsop
     {
-      printf("Lend_%d:\n", $1);
-    }
+      //debug
+
+      //printf("End_0%d:\n", $1);
+      printf("//fin de conditionnelle\n"); 
+        }
 ;
 
 
