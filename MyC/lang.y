@@ -572,7 +572,7 @@ cond :
     inst
     {
       printf("    // la condition %d est vraie\n", $1);
-      //printf("    GOTO(End_%d);\n", $1);
+      printf("    GOTO(End_%d);\n", $1);
       printf("False_%d:\n", $1);
       printf("    // la condition %d est fausse\n", $1);
     } 
@@ -580,7 +580,7 @@ cond :
     {
       //debug
 
-      //printf("End_0%d:\n", $1);
+      printf("End_0%d:\n", $1);
       printf("//fin de conditionnelle\n"); 
         }
 ;
