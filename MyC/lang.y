@@ -35,16 +35,18 @@ void reset_offset() {
 }
 
 void enter_block() {
-    if (depth > 1) {  // Functions and sub-blocks
+    //printf("    // Entering block - current depth=%d, new depth=%d\n", depth, depth + 1);
+    if (depth > 1) {  // Sous-blocs seulement (pas pour le bloc fonction initial)
         printf("    SAVEBP;\n");
     }
     depth++;
     reset_offset();
 }
+
 void exit_block() {
+    //printf("    // Exiting block - current depth=%d, new depth=%d\n", depth, depth - 1);
     depth--;
-    //printf("    // DEBUG: exit_block() - new_depth=%d\n", depth);
-    if (depth > 1) {
+    if (depth >1) {  // Sous-blocs seulement (pas pour le bloc fonction)
         printf("    RESTOREBP;\n");
     }
 }
@@ -56,7 +58,7 @@ void generate_variable_address(attribute a) {
         return;
     }
 
-    printf("    // generate_variable_address: depth=%d, offset=%d\n", a->depth, a->offset);
+    //printf("    // generate_variable_address: depth=%d, offset=%d , a->depth=%d\n", depth, a->offset, a->depth);
 
     
     if (a->depth == depth) {
@@ -79,11 +81,19 @@ void generate_variable_address(attribute a) {
     } else {
         // Variable parente
         printf("    LOADBP;\n");
-        if (depth - a->depth > 1) {
+        //if (depth - a->depth > 1  ) {
             // Monter dans les blocs parents
-            for (int i = 0; i < depth - a->depth - 1; i++) {
-        printf("    LOAD; accessing upper block depth %d\n" , a->depth);            }
-        }
+// Monter dans les blocs parents
+if ((a->offset < 0 && depth != 1) || (a->offset >= 0 && depth - a->depth >= 1)) {
+    for (int i = 0; i < depth - a->depth - 1; i++) {
+        printf("    LOAD; // accessing upper block depth %d\n", a->depth + i + 1);
+    }
+    
+    // Toujours un LOAD pour le parent immédiat si ce n'est pas un paramètre
+    if (a->offset >= 0) {
+        printf("    LOAD; // accessing upper block depth %d\n", a->depth);
+    }
+}
 
           if (a->offset >= 0) {
             //printf("    LOAD;\n ");
@@ -110,7 +120,7 @@ void start_function(char *name) {
 
 void add_parameter() {
     current_function_param_count++;
-    printf("// DEBUG: add_parameter - count now=%d\n", current_function_param_count);
+    //printf("// DEBUG: add_parameter - count now=%d\n", current_function_param_count);
 }
 
 void end_function() {
@@ -124,8 +134,7 @@ void register_function(char *name, int return_type, int param_count) {
     attribute func_attr = makeSymbol(return_type, -param_count, 0);
     set_symbol_value(name, func_attr);
     //debug
- printf("// DEBUG: Registered function %s with %d params (offset=%d)\n", 
-           name, param_count, -param_count);
+ //printf("// DEBUG: Registered function %s with %d params (offset=%d)\n",  name, param_count, -param_count);
 }
 
 // Vérifier si un symbole est une fonction
@@ -274,11 +283,11 @@ params : type ID vir params
     int current_offset = param_offset;
     attribute a = makeSymbol($1, current_offset, 1); // depth=1, offset négatif
     set_symbol_value($2, a);
-    printf("// DEBUG: Paramètre %s - offset=%d (avant offset--)\n", $2, current_offset);
+    //printf("// DEBUG: Paramètre %s - offset=%d (avant offset--)\n", $2, current_offset);
 
     param_offset--;
     add_parameter();
-    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    //printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
     $$ =current_function_param_count;
 
 
@@ -289,10 +298,10 @@ params : type ID vir params
     // Dernier paramètre
     attribute a = makeSymbol($1, param_offset, 1);
     set_symbol_value($2, a);
-    printf("// DEBUG: Dernier paramètre %s - offset=%d (avant offset--)\n", $2, param_offset);
+    //printf("// DEBUG: Dernier paramètre %s - offset=%d (avant offset--)\n", $2, param_offset);
     param_offset--;
     add_parameter();
-    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    //printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
     $$ =current_function_param_count;
 
 }
@@ -310,17 +319,20 @@ fun_body :{
         printf("void pcode_%s() {\n", current_function_name);
 
         //register_function(current_function_name, $<type_value>0, current_function_param_count);
-        printf("    // Fonction %s: type=%s, params=%d\n", 
-               current_function_name, type2string($<type_value>0), current_function_param_count);
+        //printf("    // Fonction %s: type=%s, params=%d\n",      current_function_name, type2string($<type_value>0), current_function_param_count);
         
-        enter_block(); 
+    
+        depth = 1;
+        reset_offset();
+    
 
 }
  fao block faf       {
-        exit_block();   // ← Détruit le contexte fonction
+        //exit_block();   // ← Détruit le contexte fonction
 
         printf("}\n\n");
         end_function();
+        depth = 0;
  }
 ;
 
@@ -334,12 +346,14 @@ faf : AF                       {}
 
 block:
     { 
+        //printf("    // Entering block at depth %d\n", depth);
         if (depth >= 1) { // Sous-blocs seulement (pas pour le bloc fonction)
             enter_block();
         }
     }
     decl_list inst_list 
-    { 
+    {   
+        //printf("    // Exiting block at depth %d\n", depth);
         if (depth >= 1) { // Sous-blocs seulement
             exit_block();
         }
@@ -463,11 +477,14 @@ aff : ID EQ exp
     }
 
 
+    //printf("    // Debug: avant generate_variable_address pour %s\n", $1);
     // Charger l'adresse de la variable
-    //printf("    LOADI(%d);\n", a->offset);
     generate_variable_address(a);
+    //printf("    // Debug: après generate_variable_address pour %s\n", $1);
     // STORE : stocke la valeur dans la variable
+    //printf("    // Debug: avant STORE\n");
     printf("    STORE;\n");
+    //printf("    // Debug: après STORE\n");
 
     $$ = type_var;   
 
@@ -880,36 +897,19 @@ int main () {
      sur ce fichier pour lancer dessus la compilation.
    */
 
-char * header =
-"// PCode Header\n"
-"#include \"PCode/PCode.h\"\n"
-"#include <stdio.h>\n"
-"\n"
-"void pcode_main();\n"
-"void init_glob_var();\n"
-"\n"
-"int main() {\n"
-"    printf(\"=== DEBUT EXECUTION ===\\n\");\n"
-"    init_glob_var();\n"
-"    pcode_main();\n"
-"    \n"
-"    // Affichage debug\n"
-"    printf(\"Stack pointer: %d\\n\", sp);\n"
-"    printf(\"Contenu de la pile:\\n\");\n"
-"    for (int i = 0; i < sp; i++) {\n"
-"        printf(\"  stack[%d] = %d\\n\", i, stack[i].int_value);\n"
-"    }\n"
-"    \n"
-"    printf(\"Variables globales: x=%d, y=%d, z=%d\\n\", \n"
-"           stack[0].int_value, stack[1].int_value, stack[2].int_value);\n"
-"    \n"
-"    int result = stack[sp-1].int_value;\n"
-"    printf(\"Valeur de retour: %d\\n\", result);\n"
-"    printf(\"=== FIN EXECUTION ===\\n\");\n"
-"    \n"
-"    return result;\n"
-"}\n"
-"\n"; 
+   char * header=
+   	"// PCode Header\n\
+   	#include \"PCode.h\"\n\
+   	\n\
+   	void pcode_main();\n\
+   	void init_glob_var();\n\
+   	\n\
+   	int main() {\n\
+   	init_glob_var();\n\
+   	pcode_main();\n\
+   	return stack[sp-1].int_value;\n\
+   	}\n\
+   	\n"; 
 
 printf("%s\n",header); // ouput header
   
