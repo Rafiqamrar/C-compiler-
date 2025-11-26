@@ -421,8 +421,8 @@ type
 : typename                     {}
 ;
 
-typename // Utilisation des terminaux comme codage (entier) du type !!!
-: INT                          {$$=INT;} 
+typename : // Utilisation des terminaux comme codage (entier) du type !!!
+ INT                          {$$=INT;} 
 | FLOAT                        {$$=FLOAT;}
 | VOID                         {$$=VOID;}
 ;
@@ -580,7 +580,7 @@ cond :
     {
       //debug
 
-      printf("End_0%d:\n", $1);
+      printf("End_%d:\n", $1);
       printf("//fin de conditionnelle\n"); 
         }
 ;
