@@ -820,18 +820,41 @@ if ($1 == FLOAT && $3 == INT) {
     // $$ = INT;
     yyerror("NOT/AND/OR non implementés (option booléens paresseux)");
   }
-| exp AND exp
+| exp 
   {
-   int L1 = newLabel();
-   //compile $1 si vrai fais le suivant sinon saute a L1
-
-    
-
+    //yyerror("AND non implementé en version non paresseuse");
+    int label = newLabel();
+    $1 = label;
+    printf("    IFN(Lfalse_%d);\n", $1);
   }
-| exp OR exp
+  AND exp
   {
+    printf("    IFT(Ltrue_%d);\n", $1);
+    printf("Lfalse_%d:\n", $1);
+    printf("    LOADI(0);\n");
+    printf("    GOTO(Lend_%d);\n", $1);
+    printf("Ltrue_%d:\n", $1);
+    printf("    LOADI(1);\n");
+    printf("Lend_%d:\n", $1);
+  }
+
+| exp {
     //yyerror("OR non implementé en version non paresseuse");
+    int label = newLabel();
+    $1 = label;
+    printf("    IFT(Ltrue_%d);\n", $1);
   }
+  OR exp
+  {
+    printf("    IFN(Lfalse_%d);\n",$1);
+    printf("Ltrue_%d:\n", $1);
+    printf("    LOADI(1);\n");
+    printf("    GOTO(Lend_%d);\n", $1);
+    printf("Lfalse_%d:\n", $1);
+    printf("    LOADI(0);\n");
+    printf("Lend_%d:\n", $1);
+  }
+  
 
 
 ;
