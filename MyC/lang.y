@@ -14,16 +14,18 @@ void yyerror (char* s) {
   printf ("%s\n",s);
   exit(0);
   }
+
+#define MAXDEPTH 100
 		
 int depth=0; // block depth
 int offset=0; // variable offset in current block
 int param_offset=-1; // parameter offset in current function
 int current_decl_type; // type of current declaration (used in vlist)
+int depth_offset[MAXDEPTH] = {0};
  
 int label_counter = 0;
 
 int newLabel() {
-
     return label_counter++;
 }
 
@@ -241,7 +243,7 @@ glob_var_list : glob_var_list decl PV {}
  }
 ;
 
-glob_fun_list : glob_fun_list fun {}
+glob_fun_list : glob_fun_list fun
 | fun {}
 ;
 
@@ -377,7 +379,7 @@ var_decl :
 vlist :
       vlist VIR ID
 {
-    attribute a = makeSymbol($<type_value>0, offset, depth);
+    attribute a = makeSymbol($<type_value>0, depth_offset[depth], depth);
     set_symbol_value($3, a);
     //printf("    // DECL %s: depth=%d, offset=%d\n", $3, depth, offset); //DEBUG
     if (a->type == INT)
@@ -388,12 +390,12 @@ vlist :
     //printf("    LOADI(%d);\n", a->offset);
     //printf("    STORE;\n");
     
-
+    depth_offset[depth]++;
     offset++;
 }
 | ID
 {
-    attribute a = makeSymbol($<type_value>0, offset, depth);
+    attribute a = makeSymbol($<type_value>0, depth_offset[depth], depth);
     set_symbol_value($1, a);
 
     if (a->type == INT)
@@ -404,6 +406,7 @@ vlist :
     //printf("    LOADI(%d);\n", a->offset);
     //printf("    STORE;\n");
 
+    depth_offset[depth]++;
     offset++;
 }
 ;
@@ -422,7 +425,7 @@ type
 ;
 
 typename : // Utilisation des terminaux comme codage (entier) du type !!!
- INT                          {$$=INT;} 
+  INT                          {$$=INT;} 
 | FLOAT                        {$$=FLOAT;}
 | VOID                         {$$=VOID;}
 ;
@@ -571,17 +574,13 @@ cond :
     }
     inst
     {
-      printf("    // la condition %d est vraie\n", $1);
       printf("    GOTO(End_%d);\n", $1);
       printf("False_%d:\n", $1);
-      printf("    // la condition %d est fausse\n", $1);
     } 
     elsop
     {
       //debug
-
       printf("End_%d:\n", $1);
-      printf("//fin de conditionnelle\n"); 
         }
 ;
 
