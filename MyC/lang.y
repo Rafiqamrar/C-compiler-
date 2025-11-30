@@ -1,9 +1,13 @@
 %{
+
+
 #include "Table_des_symboles.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include "PCode/PCode.h"
+
+#define MAX_DEPTH 100
   
 extern int yylex();
 extern int yyparse();
@@ -12,18 +16,17 @@ void yyerror (char* s) {
   printf ("%s\n",s);
   exit(0);
   }
-
-#define MAXDEPTH 100
 		
 int depth=0; // block depth
 int offset=0; // variable offset in current block
+int depth_offset[MAX_DEPTH]; 
 int param_offset=-1; // parameter offset in current function
 int current_decl_type; // type of current declaration (used in vlist)
-int depth_offset[MAXDEPTH] = {0};
- 
+int current_function_type; // type of current function (used in fun_head)
 int label_counter = 0;
 
 int newLabel() {
+
     return label_counter++;
 }
 
@@ -54,7 +57,7 @@ void exit_block() {
 
 void generate_variable_address(attribute a) {
     if (a == NULL) {
-        printf("    // ERREUR: Variable non trouvée\n");
+        printf("    // ERREUR: Variable non trouvÃ©e\n");
         return;
     }
 
@@ -67,7 +70,7 @@ void generate_variable_address(attribute a) {
             printf("    LOADBP; \n");
             printf("    SHIFT(%d);\n", a->offset + 1);
         } else {
-            // Paramètre (offset négatif)
+            // ParamÃ¨tre (offset nÃ©gatif)
             printf("    LOADBP; \n");
             printf("    SHIFT(%d);\n", a->offset); 
         }
@@ -89,17 +92,18 @@ if ((a->offset < 0 && depth != 1) || (a->offset >= 0 && depth - a->depth >= 1)) 
         printf("    LOAD; // accessing upper block depth %d\n", a->depth + i + 1);
     }
     
-    // Toujours un LOAD pour le parent immédiat si ce n'est pas un paramètre
+    // Toujours un LOAD pour le parent immÃ©diat si ce n'est pas un paramÃ¨tre
     if (a->offset >= 0) {
         printf("    LOAD; // accessing upper block depth %d\n", a->depth);
     }
 }
+
           if (a->offset >= 0) {
             //printf("    LOAD;\n ");
             // Variable locale du parent
             printf("    SHIFT(%d);\n", a->offset + 1);
         } else {
-            // Paramètre du parent  
+            // ParamÃ¨tre du parent  
             printf("    SHIFT(%d);\n", a->offset);
         }
     }
@@ -108,7 +112,7 @@ if ((a->offset < 0 && depth != 1) || (a->offset >= 0 && depth - a->depth >= 1)) 
 
 
 
-// Variables globales ajoutées
+// Variables globales ajoutÃ©es
 char *current_function_name = NULL;
 int current_function_param_count = 0;
 
@@ -136,7 +140,7 @@ void register_function(char *name, int return_type, int param_count) {
  //printf("// DEBUG: Registered function %s with %d params (offset=%d)\n",  name, param_count, -param_count);
 }
 
-// Vérifier si un symbole est une fonction
+// VÃ©rifier si un symbole est une fonction
 int is_function(attribute a) {
     return (a != NULL && a->offset == -1 && a->depth == 0);
 }
@@ -226,7 +230,7 @@ void end_glob_var_decl(){
 
 %%
 
- // O. Déclaration globale
+ // O. DÃ©claration globale
 
 prog : glob_decl_list              {}
 ;
@@ -240,7 +244,7 @@ glob_var_list : glob_var_list decl PV {}
  }
 ;
 
-glob_fun_list : glob_fun_list fun
+glob_fun_list : glob_fun_list fun {}
 | fun {}
 ;
 
@@ -254,28 +258,24 @@ fun : type fun_head fun_body   {
 po: PO {end_glob_var_decl();}  // dirty trick to end function init_glob_var() definition in target code
   
 fun_head : ID po PF            {
-  start_function($1);
-  if (current_function_name == NULL) {
-        yyerror("No current function name!");
-    }
-  printf("%s pcode_%s() {\n", type2string($<type_value>0), current_function_name);
-  // Pas de déclaration de fonction à l'intérieur de fonctions !
+  // Pas de dÃ©claration de fonction Ã  l'intÃ©rieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
   start_function($1);
   //reset offset for parameters
   param_offset = -1;
-
+  current_function_type = $<type_value>0;  // Stocker le type
+  register_function($1, current_function_type, 0);
+  
 
   }
 
 | ID po params PF              {
    // Pas de dÃ©claration de fonction Ã  l'intÃ©rieur de fonctions !
-   start_function($1);
   if (depth>0) yyerror("Function must be declared at top level~!\n");
   start_function($1);
   param_offset = -1;
-  register_function($1, $<type_value>0, $3);
-
+  current_function_type = $<type_value>0;  // Stocker le type
+  register_function($1, current_function_type, $3);
 
  }
 ;
@@ -283,34 +283,17 @@ fun_head : ID po PF            {
 
 params : type ID vir params
 {
-    // Paramètre: type 1, nom 2
-    // Attribuer offset NÉGATIF
+    // ParamÃ¨tre: type 1, nom 2
+    // Attribuer offset NÃ‰GATIF
     int current_offset = param_offset;
-    attribute a = makeSymbol($1, current_offset, 1); // depth=1, offset négatif
+    attribute a = makeSymbol($1, current_offset, 1); // depth=1, offset nÃ©gatif
     set_symbol_value($2, a);
-    //printf("// DEBUG: Paramètre %s - offset=%d (avant offset--)\n", $2, current_offset);
+    //printf("// DEBUG: ParamÃ¨tre %s - offset=%d (avant offset--)\n", $2, current_offset);
 
     param_offset--;
     add_parameter();
     //printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
     $$ =current_function_param_count;
-
-
-    
-}
-| type ID
-{
-    // Dernier paramètre
-    attribute a = makeSymbol($1, param_offset, 1);
-    set_symbol_value($2, a);
-    //printf("// DEBUG: Dernier paramètre %s - offset=%d (avant offset--)\n", $2, param_offset);
-    param_offset--;
-    add_parameter();
-    //printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
-    $$ =current_function_param_count;
-
-}
-;
 
 
     
@@ -320,17 +303,17 @@ params : type ID vir params
     // Dernier paramÃ¨tre
     attribute a = makeSymbol($1, param_offset, 1);
     set_symbol_value($2, a);
-    printf("// DEBUG: Dernier paramÃ¨tre %s - offset=%d (avant offset--)\n", $2, param_offset);
+    //printf("// DEBUG: Dernier paramÃ¨tre %s - offset=%d (avant offset--)\n", $2, param_offset);
     param_offset--;
     add_parameter();
-    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
+    //printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
     $$ =current_function_param_count;
 
 }
 ;
 
 
-vir : VIR                      {printf(", ");}
+vir : VIR                      {}
 ;
 
 fun_body :{
@@ -350,7 +333,7 @@ fun_body :{
 
 }
  fao block faf       {
-        //exit_block();   // ← Détruit le contexte fonction
+        //exit_block();   // â† DÃ©truit le contexte fonction
 
         printf("}\n\n");
         end_function();
@@ -399,7 +382,7 @@ var_decl :
 vlist :
       vlist VIR ID
 {
-    attribute a = makeSymbol($<type_value>0, depth_offset[depth], depth);
+    attribute a = makeSymbol($<type_value>0, offset, depth);
     set_symbol_value($3, a);
     //printf("    // DECL %s: depth=%d, offset=%d\n", $3, depth, offset); //DEBUG
     if (a->type == INT)
@@ -407,15 +390,17 @@ vlist :
     else
         printf("    LOADF(0.0);\n");
 
+        
+
     //printf("    LOADI(%d);\n", a->offset);
     //printf("    STORE;\n");
     
-    depth_offset[depth]++;
+
     offset++;
 }
 | ID
 {
-    attribute a = makeSymbol($<type_value>0, depth_offset[depth], depth);
+    attribute a = makeSymbol($<type_value>0, offset, depth);
     set_symbol_value($1, a);
 
     if (a->type == INT)
@@ -423,10 +408,10 @@ vlist :
     else
         printf("    LOADF(0.0);\n");
 
+        
     //printf("    LOADI(%d);\n", a->offset);
     //printf("    STORE;\n");
 
-    depth_offset[depth]++;
     offset++;
 }
 ;
@@ -444,7 +429,7 @@ type
 : typename                     {}
 ;
 
-typename : // Utilisation des terminaux comme codage (entier) du type !!!
+typename: // Utilisation des terminaux comme codage (entier) du type !!!
   INT                          {$$=INT;} 
 | FLOAT                        {$$=FLOAT;}
 | VOID                         {$$=VOID;}
@@ -470,7 +455,7 @@ ao block af
 | pv                          {}
 ;
 
-// Accolades explicites pour gerer l'entrée et la sortie d'un sous-bloc
+// Accolades explicites pour gerer l'entrÃ©e et la sortie d'un sous-bloc
 
 ao : AO                       {}
 ;
@@ -484,17 +469,17 @@ aff : ID EQ exp
 {
     attribute a = get_symbol_value($1);
     if (a == NULL)
-        yyerror("Variable non déclarée");
+        yyerror("Variable non dÃ©clarÃ©e");
 
     int type_var = a->type;
     int type_exp = $3;
 
-    // Conversion INT -> FLOAT si nécessaire
+    // Conversion INT -> FLOAT si nÃ©cessaire
     if (type_var == FLOAT && type_exp == INT) {
         printf("    I2F2;\n");
     }
 
-    // Erreur si FLOAT → INT
+    // Erreur si FLOAT â†’ INT
     if (type_var == INT && type_exp == FLOAT) {
         yyerror("Assignation float vers int interdite");
     }
@@ -503,11 +488,11 @@ aff : ID EQ exp
     //printf("    // Debug: avant generate_variable_address pour %s\n", $1);
     // Charger l'adresse de la variable
     generate_variable_address(a);
-    //printf("    // Debug: après generate_variable_address pour %s\n", $1);
+    //printf("    // Debug: aprÃ¨s generate_variable_address pour %s\n", $1);
     // STORE : stocke la valeur dans la variable
     //printf("    // Debug: avant STORE\n");
     printf("    STORE;\n");
-    //printf("    // Debug: après STORE\n");
+    //printf("    // Debug: aprÃ¨s STORE\n");
 
     $$ = type_var;   
 
@@ -525,7 +510,7 @@ ret : RETURN exp
         yyerror("Return outside function!");
     }
     
-    // Récupérer le type de la fonction depuis la table
+    // RÃ©cupÃ©rer le type de la fonction depuis la table
     attribute func_attr = get_symbol_value(current_function_name);
     if (func_attr == NULL) {
         yyerror("Current function not found");
@@ -545,7 +530,7 @@ ret : RETURN exp
     if (function_type == INT && expr_type == FLOAT) {
           printf("    I2F2;\n");
     }
-    // Conversion si nécessaire
+    // Conversion si nÃ©cessaire
     if (function_type == FLOAT && expr_type == INT) {
         printf("      I2F2;\n");
     }
@@ -581,9 +566,9 @@ ret : RETURN exp
 ;
 
 // IV.3. Conditionelles
-//           N.B. ces rêgles génèrent un conflit déclage reduction
-//           qui est résolu comme on le souhaite par un décalage (shift)
-//           avec ELSE en entrée (voir y.output)
+//           N.B. ces rÃªgles gÃ©nÃ¨rent un conflit dÃ©clage reduction
+//           qui est rÃ©solu comme on le souhaite par un dÃ©calage (shift)
+//           avec ELSE en entrÃ©e (voir y.output)
 
 cond :
     if {
@@ -594,13 +579,17 @@ cond :
     }
     inst
     {
+      printf("    // la condition %d est vraie\n", $1);
       printf("    GOTO(End_%d);\n", $1);
       printf("False_%d:\n", $1);
+      printf("    // la condition %d est fausse\n", $1);
     } 
     elsop
     {
       //debug
+
       printf("End_%d:\n", $1);
+      printf("//fin de conditionnelle\n"); 
         }
 ;
 
@@ -653,7 +642,7 @@ loop:
     }
     inst
 {
-    printf("    GOTO(Loop_%d);\n", $2);   // retour au début
+    printf("    GOTO(Loop_%d);\n", $2);   // retour au dÃ©but
     printf("EndLoop_%d:\n", $2);
 }
 ;
@@ -758,7 +747,7 @@ exp
 }
 | app  // permettre les appels de fonction comme expressions
   {
-    $$ = $1;  // Reprend le type déterminé dans la règle app
+    $$ = $1;  // Reprend le type dÃ©terminÃ© dans la rÃ¨gle app
   }
 ;
 
@@ -766,7 +755,7 @@ exp
 
 
 
-// V.2. Booléens
+// V.2. BoolÃ©ens
 
 | exp INF exp
   {
@@ -777,11 +766,11 @@ exp
         printf("    I2F1;\n");
     }
     if ($1 == INT && $3 == INT) {    
-      printf("    LTI;\n");   // < sur int (ou float casté dans PCode)
+      printf("    LTI;\n");   // < sur int (ou float castÃ© dans PCode)
       $$ = INT;
 
 }   else {
-      printf("    LTF;\n");   // < sur int (ou float casté dans PCode)
+      printf("    LTF;\n");   // < sur int (ou float castÃ© dans PCode)
 
 }
     $$ = INT;
@@ -794,11 +783,11 @@ if ($1 == FLOAT && $3 == INT) {
         printf("    I2F1;\n");
     }
     if ($1 == INT && $3 == INT) {    
-      printf("    GTI;\n");   // < sur int (ou float casté dans PCode)
+      printf("    GTI;\n");   // < sur int (ou float castÃ© dans PCode)
       $$ = INT;
 
 }  else {
-      printf("    GTF;\n");   // < sur int (ou float casté dans PCode) ;
+      printf("    GTF;\n");   // < sur int (ou float castÃ© dans PCode) ;
 }
     $$ = INT;
   }
@@ -810,11 +799,11 @@ if ($1 == FLOAT && $3 == INT) {
         printf("    I2F1;\n");
     }
     if ($1 == INT && $3 == INT) {    
-      printf("    EQI;\n");   // < sur int (ou float casté dans PCode)
+      printf("    EQI;\n");   // < sur int (ou float castÃ© dans PCode)
       $$ = INT;
 
 }else { 
-    printf("    EQF;\n");   // < sur int (ou float casté dans PCode)
+    printf("    EQF;\n");   // < sur int (ou float castÃ© dans PCode)
 }
     $$ = INT;
   }
@@ -826,18 +815,18 @@ if ($1 == FLOAT && $3 == INT) {
         printf("    I2F1;\n");
     }
     if ($1 == FLOAT && $3 == INT) {    
-      printf("    NEQI;\n");   // < sur int (ou float casté dans PCode)
+      printf("    NEQI;\n");   // < sur int (ou float castÃ© dans PCode)
       $$ = INT;
 
 }
-    printf("    NEQF;\n");   // < sur int (ou float casté dans PCode)
+    printf("    NEQF;\n");   // < sur int (ou float castÃ© dans PCode)
     $$ = INT;
   }
 | NOT exp %prec UNA
   {
     // printf("    NOT;\n");
     // $$ = INT;
-    yyerror("NOT/AND/OR non implementés (option booléens paresseux)");
+    yyerror("NOT/AND/OR non implementÃ©s (option boolÃ©ens paresseux)");
   }
 | exp AND
 {
@@ -880,7 +869,22 @@ if ($1 == FLOAT && $3 == INT) {
 ;
 // V.3 Applications de fonctions
 
-app : fid PO {printf("    LOADI(0);\n");}  args PF
+
+app : fid {
+
+    //print loading function address it type not void 
+    printf("    // Appel de fonction %s\n", $1);
+    //print type
+      attribute func_attr = get_symbol_value($1);
+      int return_type = func_attr->type;
+      printf("    // Type de retour: %s\n", type2string(return_type));
+    if (return_type != VOID) {
+        printf("    // La fonction %s retourne une valeur\n", $1);
+        printf("    LOADI(0);   // RÃ©server de l'espace pour la valeur de retour\n");
+    } else {
+        printf("    // La fonction %s est de type void\n", $1);
+    }
+} PO args PF
 {
     attribute func_attr = get_symbol_value($1);
     if (func_attr == NULL) {
@@ -890,19 +894,20 @@ app : fid PO {printf("    LOADI(0);\n");}  args PF
     int return_type = func_attr->type;
     int param_count = -func_attr->offset;
     
-  
-    
-    // Les arguments sont déjà empilés par 'args'
+
+    // Les arguments sont dÃ©jÃ  empilÃ©s par 'args'
     
     printf("    SAVEBP;\n");
     printf("    CALL(pcode_%s);\n", $1);
     printf("    RESTOREBP;\n");
     
-    // Dépiler les arguments
+    // DÃ©piler les arguments
     //printf("    //les nombres d'arguments: %d\n", param_count); // debug
-   printf("    DROP(%d);   // Depilement arguments\n", param_count);
-        
-    // Si fonction void, rien n'est empilé, sinon la valeur de retour est au sommet
+    //printf("    DROP(%d);   // Depilement arguments\n", param_count);
+    if (param_count > 0) {
+        printf("    DROP(%d);   // Depilement arguments\n", param_count);
+    }  
+    // Si fonction void, rien n'est empilÃ©, sinon la valeur de retour est au sommet
     $$ = return_type;
 }
 ;
@@ -915,9 +920,9 @@ args :  arglist               {
 ;
 
 arglist : arglist VIR exp {
-    // Conversion automatique INT → FLOAT si nécessaire
+    // Conversion automatique INT â†’ FLOAT si nÃ©cessaire
     if ($3 == INT) {
-        // On pourrait convertir vers float si le paramètre attend float
+        // On pourrait convertir vers float si le paramÃ¨tre attend float
         // Pour l'instant, on accepte tous les int
     } else if ($3 == FLOAT) {
         // On accepte les float
@@ -926,9 +931,9 @@ arglist : arglist VIR exp {
 }
 | exp {
     if ($1 == INT) {
-        // Accepté
+        // AcceptÃ©
     } else if ($1 == FLOAT) {
-        // Accepté  
+        // AcceptÃ©  
     }
 }
 
@@ -940,7 +945,7 @@ arglist : arglist VIR exp {
 int main () {
 
   /* Ici on peut ouvrir le fichier source, avec les messages 
-     d'erreur usuel si besoin, et rediriger l'entrée standard 
+     d'erreur usuel si besoin, et rediriger l'entrÃ©e standard 
      sur ce fichier pour lancer dessus la compilation.
    */
 
@@ -964,4 +969,3 @@ return yyparse (); // output your compilation
  
  
 } 
-

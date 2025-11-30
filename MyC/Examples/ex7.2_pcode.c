@@ -12,21 +12,26 @@
    	
 
 void init_glob_var(){
-    LOADI(0);
+}
+
+void pcode_one() {
+    LOADI(1);
+    LOADBP;
+    SHIFT(-1);
+    STORE; 
 }
 
 void pcode_main() {
     LOADI(0);
-    LOADI(3);
+    // Appel de fonction one
+    // Type de retour: int
+    // La fonction one retourne une valeur
+    LOADI(0);   // RÃ©server de l'espace pour la valeur de retour
+    SAVEBP;
+    CALL(pcode_one);
+    RESTOREBP;
     LOADBP; 
     SHIFT(1);
     STORE;
-    LOADBP; 
-    SHIFT(1);
-    LOAD;
-    LOADI(0);
-    STORE;
-    LOADI(0);
-    LOAD;
 }
 

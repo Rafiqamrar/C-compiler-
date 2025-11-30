@@ -12,14 +12,4 @@
    	
 
 void init_glob_var(){
-    LOADI(0);
-}
-
-void pcode_main() {
-    LOADI(3);
-    LOADI(0);
-    STORE;
-    LOADI(0);
-    LOAD;
-}
-
+syntax error

@@ -1,0 +1,6 @@
+void main(){
+    int x, y, z;
+    x = 10;
+    y = 0;
+    z = (x>15 && x>y);
+}
