@@ -94,10 +94,6 @@ if ((a->offset < 0 && depth != 1) || (a->offset >= 0 && depth - a->depth >= 1)) 
         printf("    LOAD; // accessing upper block depth %d\n", a->depth);
     }
 }
-
-<<<<<<< HEAD
-// Variables globales ajoutÃ©es
-=======
           if (a->offset >= 0) {
             //printf("    LOAD;\n ");
             // Variable locale du parent
@@ -113,7 +109,6 @@ if ((a->offset < 0 && depth != 1) || (a->offset >= 0 && depth - a->depth >= 1)) 
 
 
 // Variables globales ajoutées
->>>>>>> rafiq
 char *current_function_name = NULL;
 int current_function_param_count = 0;
 
@@ -124,11 +119,7 @@ void start_function(char *name) {
 
 void add_parameter() {
     current_function_param_count++;
-<<<<<<< HEAD
-    printf("// DEBUG: add_parameter - count now=%d\n", current_function_param_count);
-=======
     //printf("// DEBUG: add_parameter - count now=%d\n", current_function_param_count);
->>>>>>> rafiq
 }
 
 void end_function() {
@@ -142,27 +133,16 @@ void register_function(char *name, int return_type, int param_count) {
     attribute func_attr = makeSymbol(return_type, -param_count, 0);
     set_symbol_value(name, func_attr);
     //debug
-<<<<<<< HEAD
- printf("// DEBUG: Registered function %s with %d params (offset=%d)\n", 
-           name, param_count, -param_count);
-}
-
-// VÃ©rifier si un symbole est une fonction
-=======
  //printf("// DEBUG: Registered function %s with %d params (offset=%d)\n",  name, param_count, -param_count);
 }
 
 // Vérifier si un symbole est une fonction
->>>>>>> rafiq
 int is_function(attribute a) {
     return (a != NULL && a->offset == -1 && a->depth == 0);
 }
 
-<<<<<<< HEAD
-=======
 
 
->>>>>>> rafiq
 
 %}
 
@@ -281,30 +261,18 @@ fun_head : ID po PF            {
   printf("%s pcode_%s() {\n", type2string($<type_value>0), current_function_name);
   // Pas de déclaration de fonction à l'intérieur de fonctions !
   if (depth>0) yyerror("Function must be declared at top level~!\n");
-<<<<<<< HEAD
-  //reset offset for parameters
-  param_offset = -1;
-=======
   start_function($1);
   //reset offset for parameters
   param_offset = -1;
 
 
->>>>>>> rafiq
   }
 
 | ID po params PF              {
    // Pas de dÃ©claration de fonction Ã  l'intÃ©rieur de fonctions !
    start_function($1);
   if (depth>0) yyerror("Function must be declared at top level~!\n");
-<<<<<<< HEAD
-  if (current_function_name == NULL) {
-        yyerror("No current function name!");
-    }
-  printf("%s pcode_%s() {\n", type2string($<type_value>0), current_function_name);
-=======
   start_function($1);
->>>>>>> rafiq
   param_offset = -1;
   register_function($1, $<type_value>0, $3);
 
@@ -312,21 +280,6 @@ fun_head : ID po PF            {
  }
 ;
 
-<<<<<<< HEAD
-params : type ID vir params
-{
-    // ParamÃ¨tre: type 1, nom 2
-    // Attribuer offset NÃ‰GATIF
-    int current_offset = param_offset;
-    attribute a = makeSymbol($1, current_offset, 1); // depth=1, offset nÃ©gatif
-    set_symbol_value($2, a);
-    printf("// DEBUG: ParamÃ¨tre %s - offset=%d (avant offset--)\n", $2, current_offset);
-
-    param_offset--;
-    add_parameter();
-    printf("// DEBUG: params - added param %s, count=%d\n", $2, current_function_param_count);
-    $$ =current_function_param_count;
-=======
 
 params : type ID vir params
 {
@@ -358,7 +311,6 @@ params : type ID vir params
 
 }
 ;
->>>>>>> rafiq
 
 
     
@@ -382,20 +334,6 @@ vir : VIR                      {printf(", ");}
 ;
 
 fun_body :{
-<<<<<<< HEAD
-        //register_function(current_function_name, $<type_value>0, current_function_param_count);
-        printf("// Fonction %s: type=%s, params=%d\n", 
-               current_function_name, type2string($<type_value>0), current_function_param_count);
-        
-        enter_block(); 
-
-}
- fao block faf       {
-        exit_block();   // â† DÃ©truit le contexte fonction
-
-        printf("}\n\n");
-        end_function();
-=======
    if (current_function_name == NULL) {
         yyerror("No current function name!");
     }
@@ -417,7 +355,6 @@ fun_body :{
         printf("}\n\n");
         end_function();
         depth = 0;
->>>>>>> rafiq
  }
 ;
 
@@ -588,11 +525,7 @@ ret : RETURN exp
         yyerror("Return outside function!");
     }
     
-<<<<<<< HEAD
-    // RÃ©cupÃ©rer le type de la fonction depuis la table
-=======
     // Récupérer le type de la fonction depuis la table
->>>>>>> rafiq
     attribute func_attr = get_symbol_value(current_function_name);
     if (func_attr == NULL) {
         yyerror("Current function not found");
@@ -610,35 +543,21 @@ ret : RETURN exp
         yyerror("Void function cannot return a value");
     }
     if (function_type == INT && expr_type == FLOAT) {
-<<<<<<< HEAD
-          printf("    I2F;\n");
-    }
-    // Conversion si nÃ©cessaire
-    if (function_type == FLOAT && expr_type == INT) {
-        printf("    I2F;\n");
-=======
           printf("    I2F2;\n");
     }
     // Conversion si nécessaire
     if (function_type == FLOAT && expr_type == INT) {
         printf("      I2F2;\n");
->>>>>>> rafiq
     }
     
     int param_count = -func_attr->offset;
     int return_offset = -(param_count + 1);
-<<<<<<< HEAD
-    
-    printf("    LOADBP;\n");
-    printf("    SHIFT(%d);\n", return_offset);
-=======
 
     attribute a = makeSymbol(function_type, return_offset, 1); //depth 1 pour fonction
     generate_variable_address(a);
     
     //printf("    LOADBP;\n");
     //printf("    SHIFT(%d);\n", return_offset);
->>>>>>> rafiq
     printf("    STORE; \n");
 
     
@@ -920,23 +839,14 @@ if ($1 == FLOAT && $3 == INT) {
     // $$ = INT;
     yyerror("NOT/AND/OR non implementés (option booléens paresseux)");
   }
-<<<<<<< HEAD
-| exp 
-  {
-=======
 | exp AND
 {
->>>>>>> rafiq
     //yyerror("AND non implementé en version non paresseuse");
     int label = newLabel();
     $1 = label;
     printf("    IFN(Lfalse_%d);\n", $1);
   }
-<<<<<<< HEAD
-  AND exp
-=======
  exp
->>>>>>> rafiq
   {
     printf("    IFT(Ltrue_%d);\n", $1);
     printf("Lfalse_%d:\n", $1);
@@ -947,22 +857,14 @@ if ($1 == FLOAT && $3 == INT) {
     printf("Lend_%d:\n", $1);
   }
 
-<<<<<<< HEAD
-| exp {
-=======
 | exp OR
 {
->>>>>>> rafiq
     //yyerror("OR non implementé en version non paresseuse");
     int label = newLabel();
     $1 = label;
     printf("    IFT(Ltrue_%d);\n", $1);
   }
-<<<<<<< HEAD
-  OR exp
-=======
  exp
->>>>>>> rafiq
   {
     printf("    IFN(Lfalse_%d);\n",$1);
     printf("Ltrue_%d:\n", $1);
@@ -978,10 +880,6 @@ if ($1 == FLOAT && $3 == INT) {
 ;
 // V.3 Applications de fonctions
 
-<<<<<<< HEAD
-=======
-
->>>>>>> rafiq
 app : fid PO {printf("    LOADI(0);\n");}  args PF
 {
     attribute func_attr = get_symbol_value($1);
@@ -994,29 +892,17 @@ app : fid PO {printf("    LOADI(0);\n");}  args PF
     
   
     
-<<<<<<< HEAD
-    // Les arguments sont dÃ©jÃ  empilÃ©s par 'args'
-=======
     // Les arguments sont déjà empilés par 'args'
->>>>>>> rafiq
     
     printf("    SAVEBP;\n");
     printf("    CALL(pcode_%s);\n", $1);
     printf("    RESTOREBP;\n");
     
-<<<<<<< HEAD
-    // DÃ©piler les arguments
-    //printf("    //les nombres d'arguments: %d\n", param_count); // debug
-   printf("    DROP(%d);   // Depilement arguments\n", param_count);
-        
-    // Si fonction void, rien n'est empilÃ©, sinon la valeur de retour est au sommet
-=======
     // Dépiler les arguments
     //printf("    //les nombres d'arguments: %d\n", param_count); // debug
    printf("    DROP(%d);   // Depilement arguments\n", param_count);
         
     // Si fonction void, rien n'est empilé, sinon la valeur de retour est au sommet
->>>>>>> rafiq
     $$ = return_type;
 }
 ;
@@ -1029,15 +915,9 @@ args :  arglist               {
 ;
 
 arglist : arglist VIR exp {
-<<<<<<< HEAD
-    // Conversion automatique INT â†’ FLOAT si nÃ©cessaire
-    if ($3 == INT) {
-        // On pourrait convertir vers float si le paramÃ¨tre attend float
-=======
     // Conversion automatique INT → FLOAT si nécessaire
     if ($3 == INT) {
         // On pourrait convertir vers float si le paramètre attend float
->>>>>>> rafiq
         // Pour l'instant, on accepte tous les int
     } else if ($3 == FLOAT) {
         // On accepte les float
@@ -1046,13 +926,6 @@ arglist : arglist VIR exp {
 }
 | exp {
     if ($1 == INT) {
-<<<<<<< HEAD
-        // AcceptÃ©
-    } else if ($1 == FLOAT) {
-        // AcceptÃ©  
-    }
-}
-=======
         // Accepté
     } else if ($1 == FLOAT) {
         // Accepté  
@@ -1060,7 +933,6 @@ arglist : arglist VIR exp {
 }
 
 
->>>>>>> rafiq
 
 
 
