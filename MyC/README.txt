@@ -82,20 +82,58 @@ vers les bons labels au moment où la logique devient déterminable (par exemple
 
     La gestion des sous-blocs et des variables locales est venue ensuite avec une table des symboles utilisée comme 
 pile. Chaque entrée dans un bloc pousse un contexte, chaque sortie le supprime. Les variables locales sont 
-associées à un offset relatif à un pointeur de bloc bp, ce qui rend possible une portée lexicale propre, 
-indépendante des offsets globaux.
+associées à un offset relatif à un pointeur de bloc bp, ce qui rend possible une portée lexicale propre 
+indépendante des offsets globaux, et permettant d'accéder à ces variables.
+
+
+
+//-------------------------------------------------------------------------------------------------------\\
+
+                Partie 7 et 8: Gestion des fonctions simples ou typées, non récursives et sans sous-blocs
+
+\\-------------------------------------------------------------------------------------------------------//
 
     Les premières fonctions ajoutées étaient non typées, sans récursion et sans bloc interne. Une fonction 
-int add(a, b){} devient une fonction PCode pcode_add() où les arguments sont empilés avant appel et où la valeur
+int add(a, b){} devient une fonction PCode void pcode_add(){} où les arguments sont empilés avant appel et où la valeur
 renvoyée reste au sommet de la pile. Les fonctions typées ont ensuite complété ce modèle : paramètres et valeur
 de retour peuvent être INT, FLOAT ou VOID, avec conversions automatiques INT → FLOAT si nécessaire, et aucune
 valeur laissée en pile dans le cas VOID.
+
+
+
+
+//-------------------------------------------------------------------------------------------------------\\
+
+                Partie 9: Gestion des fonctions non récursives avec sous-blocs
+
+\\-------------------------------------------------------------------------------------------------------//
 
     Par la suite, les fonctions ont été étendues pour supporter des sous-blocs et donc des retours situés à 
 l’intérieur de structures imbriquées, tout en maintenant correctement le contexte mémoire et la table des symboles. 
 La dernière étape a permis l’ajout de la récursion, nécessitant une gestion fiable de la structure d’activation et 
 la mise à jour correcte du pointeur de base pour chaque appel.
 
+
+
+//-------------------------------------------------------------------------------------------------------\\
+
+                        Partie 10: Gestion des fonctions récursives générales
+
+\\-------------------------------------------------------------------------------------------------------//
+
+    La dernière étape du projet a permis d’ajouter la prise en charge des fonctions récursives, c’est-à-dire la 
+capacité pour une fonction de s’appeler elle-même, directement ou via d’autres fonctions. Pour cela, il a été
+nécessaire d’adapter le modèle d’activation : chaque appel doit créer un nouvel environnement d'exécution 
+contenant les paramètres, variables locales et informations de retour, sans écraser l'appel précédent.
+
+
+
+
+//-------------------------------------------------------------------------------------------------------\\
+
+                                    Utilisation et fonctionnement
+
+\\-------------------------------------------------------------------------------------------------------//
 
     A partir du code décrit esentiellement dans le .y, ./Makefile produit
 un executable ./lang qui compile stdin vers stdout. Une façon simple
