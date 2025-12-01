@@ -48,6 +48,8 @@ void enter_block() {
 
 void exit_block() {
     //printf("    // Exiting block - current depth=%d, new depth=%d\n", depth, depth - 1);
+
+    remove_symbols_at_depth(depth);
     depth--;
     if (depth >1) {  // Sous-blocs seulement (pas pour le bloc fonction)
         printf("    RESTOREBP;\n");
@@ -334,7 +336,7 @@ fun_body :{
 }
  fao block faf       {
         //exit_block();   // â† DÃ©truit le contexte fonction
-
+        remove_symbols_at_depth(1);
         printf("}\n\n");
         end_function();
         depth = 0;

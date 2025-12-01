@@ -80,3 +80,24 @@ attribute set_symbol_value(char * symb_id,attribute value) {
 	return storage -> symbol_value;
 }
 
+
+void remove_symbols_at_depth (int depth) {
+	elem * tracker = storage;	
+	elem * previous = NULL;
+	while (tracker) {
+	  if (tracker -> symbol_value -> depth == depth) {
+	    if (previous == NULL) {
+	      storage = tracker -> next;
+	      free(tracker);
+	      tracker = storage;
+	    } else {
+	      previous -> next = tracker -> next;
+	      free(tracker);
+	      tracker = previous -> next;
+	    }
+	  } else {
+	    previous = tracker;
+	    tracker = tracker -> next;
+	  }
+	}
+}
